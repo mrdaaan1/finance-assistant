@@ -10,10 +10,12 @@ export function CatMascot({
   mood = "happy",
   size = 96,
   className,
+  animated = true,
 }: {
   mood?: CatMood;
   size?: number;
   className?: string;
+  animated?: boolean;
 }) {
   const { earColor, eye, mouth } = moodProps[mood];
 
@@ -28,15 +30,32 @@ export function CatMascot({
       role="img"
       aria-label={`Кот-помощник: ${mood}`}
     >
+      {animated && (
+        <style>
+          {`
+            @keyframes cat-blink {
+              0%, 88%, 100% { transform: scaleY(1); }
+              92% { transform: scaleY(0.1); }
+            }
+            @keyframes cat-tongue {
+              0%, 75%, 100% { opacity: 0; transform: translateY(0); }
+              80%, 92% { opacity: 1; transform: translateY(3px); }
+            }
+            .cat-eye { transform-origin: center; animation: cat-blink 4s ease-in-out infinite; }
+            .cat-tongue { animation: cat-tongue 6s ease-in-out infinite; }
+          `}
+        </style>
+      )}
+
       <path d="M28 30 L20 8 L42 24 Z" fill={earColor} />
       <path d="M72 30 L80 8 L58 24 Z" fill={earColor} />
       <ellipse cx="50" cy="55" rx="34" ry="30" fill="#2a2650" />
       <ellipse cx="50" cy="57" rx="27" ry="23" fill="#3a3570" />
 
-      <g transform="translate(37, 52)">
+      <g className={animated ? "cat-eye" : undefined} transform="translate(37, 52)">
         <path d={eye} stroke="#f3f2fb" strokeWidth="3" strokeLinecap="round" fill="none" />
       </g>
-      <g transform="translate(63, 52)">
+      <g className={animated ? "cat-eye" : undefined} transform="translate(63, 52)">
         <path d={eye} stroke="#f3f2fb" strokeWidth="3" strokeLinecap="round" fill="none" />
       </g>
 
@@ -48,6 +67,17 @@ export function CatMascot({
         strokeLinecap="round"
         fill="none"
       />
+
+      {animated && mood !== "sad" && (
+        <ellipse
+          className="cat-tongue"
+          cx="50"
+          cy="70"
+          rx="4"
+          ry="5"
+          fill="#e8749a"
+        />
+      )}
 
       <circle cx="30" cy="66" r="4" fill="#8b7bf7" opacity="0.5" />
       <circle cx="70" cy="66" r="4" fill="#8b7bf7" opacity="0.5" />

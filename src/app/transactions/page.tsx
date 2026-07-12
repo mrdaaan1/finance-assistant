@@ -4,10 +4,14 @@ import { useEffect, useState } from "react";
 import { AuthGate } from "@/components/AuthGate";
 import { MoneyInput } from "@/components/MoneyInput";
 import { SegmentedSelect } from "@/components/SegmentedSelect";
+import { ChipSelect } from "@/components/ChipSelect";
 import { StreakModal } from "@/components/StreakModal";
 import { useSession } from "@/lib/finance/session-context";
 import { todayLocalDateString } from "@/lib/finance/date-utils";
+import { categoryIcon } from "@/lib/finance/category-icons";
 import type { Category, Goal, Transaction, TransactionKind } from "@/lib/finance/types";
+
+const NO_GOAL = "__none__";
 
 function formatMoney(amount: number) {
   return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(amount);
@@ -67,7 +71,7 @@ function TransactionsPageContent() {
     const { error } = await supabase.from("transactions").insert({
       user_id: profile.id,
       category_id: kind === "saving" ? null : categoryId || null,
-      goal_id: kind === "saving" ? goalId || null : null,
+      goal_id: kind === "saving" && goalId !== NO_GOAL ? goalId || null : null,
       kind,
       amount: Number(amount),
       occurred_on: occurredOn,
@@ -125,27 +129,26 @@ function TransactionsPageContent() {
         />
 
         {kind === "saving" ? (
-          goals.length > 0 ? (
-            <SegmentedSelect
-              options={goals.map((g) => ({ value: g.id, label: g.name }))}
-              value={goalId}
-              onChange={setGoalId}
-              columns={Math.min(goals.length, 2)}
-            />
-          ) : (
-            <p className="text-muted text-sm">
-              Сначала создай цель в разделе «Цели», чтобы откладывать на неё
-            </p>
-          )
-        ) : (
-          <SegmentedSelect
+          <ChipSelect
             options={[
-              { value: "", label: "Без категории" },
-              ...filteredCategories.map((c) => ({ value: c.id, label: c.name, icon: c.icon ?? undefined })),
+              { value: NO_GOAL, label: "Без привязки", icon: "💰" },
+              ...goals.map((g) => ({ value: g.id, label: g.name, icon: "🎯" })),
+            ]}
+            value={goalId || NO_GOAL}
+            onChange={(v) => setGoalId(v === NO_GOAL ? "" : v)}
+          />
+        ) : (
+          <ChipSelect
+            options={[
+              { value: "", label: "Без категории", icon: "🔖" },
+              ...filteredCategories.map((c) => ({
+                value: c.id,
+                label: c.name,
+                icon: categoryIcon(c.icon),
+              })),
             ]}
             value={categoryId}
             onChange={setCategoryId}
-            columns={3}
           />
         )}
 
