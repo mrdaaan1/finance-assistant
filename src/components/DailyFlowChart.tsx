@@ -74,7 +74,7 @@ export function DailyFlowChart({ points }: { points: DailyFlowPoint[] }) {
   return (
     <div className="rounded-2xl bg-card border border-card-border p-4">
       <div className="flex items-center justify-between mb-3">
-        <p className="font-semibold">Доходы / расходы / отложения по дням</p>
+        <p className="font-semibold">Аналитика по операциям</p>
         <div className="flex gap-3 text-xs">
           {SERIES.map((s) => (
             <div key={s.key} className="flex items-center gap-1">
