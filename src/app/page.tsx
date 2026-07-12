@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { AuthGate } from "@/components/AuthGate";
 import { CatMascot, type CatMood } from "@/components/CatMascot";
 import { DailyFlowChart, type DailyFlowPoint } from "@/components/DailyFlowChart";
@@ -174,6 +175,17 @@ function DashboardContent() {
         </div>
         <CatMascot mood={catMoodForStreak(streak)} size={64} interactive />
       </div>
+
+      <Link
+        href="/cat"
+        className="rounded-2xl bg-card border border-card-border p-4 flex items-center justify-between"
+      >
+        <div>
+          <p className="font-semibold">🐾 Поговорить с Фиником</p>
+          <p className="text-muted text-xs">Голосовой финансовый наставник</p>
+        </div>
+        <span className="text-2xl">→</span>
+      </Link>
 
       {!profile?.is_premium && (
         <button
