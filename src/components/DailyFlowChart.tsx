@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 export type DailyFlowPoint = {
   date: string; // YYYY-MM-DD
@@ -31,6 +31,16 @@ function formatDayLabel(dateStr: string) {
 
 export function DailyFlowChart({ points }: { points: DailyFlowPoint[] }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  function handleWheel(e: React.WheelEvent<HTMLDivElement>) {
+    // На десктопе колесо мыши даёт только вертикальный скролл — конвертируем
+    // его в горизонтальный, если сам жест не был уже горизонтальным (трекпад).
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && scrollRef.current) {
+      e.preventDefault();
+      scrollRef.current.scrollLeft += e.deltaY;
+    }
+  }
 
   const maxValue = useMemo(() => {
     const max = Math.max(1, ...points.flatMap((p) => [p.income, p.expense, p.saving]));
@@ -65,7 +75,7 @@ export function DailyFlowChart({ points }: { points: DailyFlowPoint[] }) {
         </div>
       </div>
 
-      <div className="overflow-x-auto scrollbar-none" dir="rtl">
+      <div ref={scrollRef} className="overflow-x-auto scrollbar-none" dir="rtl" onWheel={handleWheel}>
         <div style={{ width: chartWidth, height: CHART_HEIGHT }} className="relative" dir="ltr">
           <svg width={chartWidth} height={CHART_HEIGHT} className="block">
             <line
@@ -173,10 +183,6 @@ export function DailyFlowChart({ points }: { points: DailyFlowPoint[] }) {
           )}
         </div>
       </div>
-
-      <p className="text-muted text-xs mt-2 text-center">
-        ← Листай влево, чтобы увидеть начало года
-      </p>
     </div>
   );
 }
