@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SessionProvider } from "@/lib/finance/session-context";
+import { BottomNav } from "@/components/BottomNav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,8 +32,11 @@ export default function RootLayout({
       <head>
         <script src="https://telegram.org/js/telegram-web-app.js" async />
       </head>
-      <body className="min-h-full flex flex-col bg-linear-to-b from-sky-50 to-blue-100">
-        {children}
+      <body className="min-h-full flex flex-col bg-background text-foreground">
+        <SessionProvider>
+          <div className="flex-1 flex flex-col">{children}</div>
+          <BottomNav />
+        </SessionProvider>
       </body>
     </html>
   );

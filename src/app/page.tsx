@@ -1,135 +1,174 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import type { Profile } from "@/lib/finance/types";
+import { useEffect, useMemo, useState } from "react";
+import { AuthGate } from "@/components/AuthGate";
+import { CatMascot, type CatMood } from "@/components/CatMascot";
+import { useSession } from "@/lib/finance/session-context";
+import type { Transaction } from "@/lib/finance/types";
 
-type TelegramWebApp = {
-  initData: string;
-  ready: () => void;
-  expand: () => void;
-};
-
-declare global {
-  interface Window {
-    Telegram?: { WebApp?: TelegramWebApp };
-  }
+function formatMoney(amount: number) {
+  return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(amount);
 }
 
-type Status = "loading" | "error" | "ready";
+function startOfWeek(date: Date) {
+  const d = new Date(date);
+  const day = (d.getDay() + 6) % 7; // понедельник = 0
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
-export default function Home() {
-  const [status, setStatus] = useState<Status>("loading");
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function catMoodForStreak(streak: number): CatMood {
+  if (streak <= 0) return "sad";
+  if (streak >= 3) return "happy";
+  return "sleepy";
+}
+
+function DashboardContent() {
+  const { supabase, profile } = useSession();
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+
+  async function handleExport() {
+    setExporting(true);
+    setExportMessage(null);
+    const res = await fetch("/api/export", { method: "POST" });
+    setExporting(false);
+    setExportMessage(res.ok ? "Отчёт отправлен тебе в чат с ботом 📩" : "Не удалось отправить отчёт");
+  }
 
   useEffect(() => {
-    const supabase = createClient();
+    async function load() {
+      const monthAgo = startOfMonth(new Date()).toISOString().slice(0, 10);
+      const { data } = await supabase
+        .from("transactions")
+        .select("id, user_id, category_id, kind, amount, occurred_on, comment, created_at, category:categories(id, user_id, name, kind, icon, is_system)")
+        .gte("occurred_on", monthAgo)
+        .order("occurred_on", { ascending: false });
 
-    async function authenticateAndLoad() {
-      const webApp = window.Telegram?.WebApp;
-      if (!webApp?.initData) {
-        setStatus("error");
-        return;
+      if (data) setTransactions(data as unknown as Transaction[]);
+    }
+    load();
+  }, [supabase]);
+
+  const stats = useMemo(() => {
+    const now = new Date();
+    const weekStart = startOfWeek(now);
+    const monthStart = startOfMonth(now);
+
+    let weekExpenses = 0;
+    let monthExpenses = 0;
+    let monthIncome = 0;
+    const byCategory = new Map<string, number>();
+
+    for (const tx of transactions) {
+      const occurred = new Date(tx.occurred_on);
+      if (tx.kind === "expense") {
+        if (occurred >= monthStart) monthExpenses += tx.amount;
+        if (occurred >= weekStart) weekExpenses += tx.amount;
+
+        const name = tx.category?.name ?? "Без категории";
+        byCategory.set(name, (byCategory.get(name) ?? 0) + tx.amount);
+      } else {
+        if (occurred >= monthStart) monthIncome += tx.amount;
       }
-
-      webApp.ready();
-      webApp.expand();
-
-      const res = await fetch("/api/telegram-auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ initData: webApp.initData }),
-      });
-
-      if (!res.ok) {
-        setStatus("error");
-        return;
-      }
-
-      const { access_token, refresh_token } = await res.json();
-      const { error: sessionError } = await supabase.auth.setSession({
-        access_token,
-        refresh_token,
-      });
-
-      if (sessionError) {
-        setStatus("error");
-        return;
-      }
-
-      const { data, error: selectError } = await supabase
-        .from("profiles")
-        .select("id, telegram_id, username, first_name, last_name, avatar_url, created_at")
-        .order("created_at", { ascending: true });
-
-      if (selectError) {
-        setStatus("error");
-        return;
-      }
-
-      setProfiles(data ?? []);
-      setStatus("ready");
     }
 
-    authenticateAndLoad();
-  }, []);
+    const topCategories = [...byCategory.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+
+    return { weekExpenses, monthExpenses, monthIncome, topCategories };
+  }, [transactions]);
+
+  const streak = profile?.current_streak ?? 0;
+  const longestStreak = profile?.longest_streak ?? 0;
 
   return (
-    <main className="flex-1 flex flex-col items-center px-4 py-8 text-blue-950">
-      <h1 className="text-2xl font-bold text-blue-700 mb-6">
-        Финансовый помощник
-      </h1>
-
-      {status === "loading" && <p className="text-blue-500">Загрузка…</p>}
-
-      {status === "error" && (
-        <p className="text-blue-500 text-center max-w-sm">
-          Не удалось авторизоваться. Открой это приложение через кнопку в
-          Telegram-боте.
-        </p>
-      )}
-
-      {status === "ready" && (
-        <div className="w-full max-w-md">
-          <h2 className="text-lg font-semibold text-blue-800 mb-3">
-            Участники ({profiles.length})
-          </h2>
-          <ul className="flex flex-col gap-2">
-            {profiles.map((profile, index) => (
-              <li
-                key={profile.id}
-                className="flex items-center gap-3 rounded-xl bg-white/70 px-4 py-3 shadow-sm border border-blue-100"
-              >
-                <span className="text-sm font-medium text-blue-400 w-6">
-                  {index + 1}
-                </span>
-                {profile.avatar_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={profile.avatar_url}
-                    alt=""
-                    className="w-9 h-9 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-blue-200 flex items-center justify-center text-blue-700 font-semibold">
-                    {profile.first_name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <div className="flex flex-col">
-                  <span className="font-medium">
-                    {profile.first_name} {profile.last_name ?? ""}
-                  </span>
-                  {profile.username && (
-                    <span className="text-sm text-blue-400">
-                      @{profile.username}
-                    </span>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+    <main className="flex-1 flex flex-col px-4 py-6 gap-5 max-w-md mx-auto w-full">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold">Привет, {profile?.first_name}!</h1>
+          <p className="text-muted text-sm">Твой финансовый дашборд</p>
         </div>
-      )}
+        <CatMascot mood={catMoodForStreak(streak)} size={64} />
+      </div>
+
+      <div className="rounded-2xl bg-gradient-to-br from-accent to-accent-dark text-white p-5 shadow-sm flex items-center justify-between">
+        <div>
+          <p className="text-white/80 text-xs uppercase tracking-wide">Серия дней подряд</p>
+          <p className="text-3xl font-extrabold">{streak} 🔥</p>
+          <p className="text-white/70 text-xs mt-1">Рекорд: {longestStreak} дней</p>
+        </div>
+        <p className="text-white/80 text-xs max-w-[40%] text-right">
+          Вноси хотя бы одну операцию каждый день, чтобы не потерять серию
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-2xl bg-card border border-card-border p-4">
+          <p className="text-muted text-xs">Доход за месяц</p>
+          <p className="text-lg font-bold text-emerald-500">+{formatMoney(stats.monthIncome)} ₽</p>
+        </div>
+        <div className="rounded-2xl bg-card border border-card-border p-4">
+          <p className="text-muted text-xs">Расход за месяц</p>
+          <p className="text-lg font-bold">−{formatMoney(stats.monthExpenses)} ₽</p>
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-card border border-card-border p-4">
+        <p className="text-muted text-xs mb-1">Траты за эту неделю</p>
+        <p className="text-2xl font-extrabold">{formatMoney(stats.weekExpenses)} ₽</p>
+      </div>
+
+      <div className="rounded-2xl bg-card border border-card-border p-4">
+        <p className="font-semibold mb-3">Топ категорий трат (месяц)</p>
+        {stats.topCategories.length === 0 && (
+          <p className="text-muted text-sm">Пока нет расходов за этот месяц</p>
+        )}
+        <div className="flex flex-col gap-2">
+          {stats.topCategories.map(([name, amount]) => {
+            const max = stats.topCategories[0][1];
+            const width = Math.max(8, Math.round((amount / max) * 100));
+            return (
+              <div key={name}>
+                <div className="flex justify-between text-sm mb-1">
+                  <span>{name}</span>
+                  <span className="font-medium">{formatMoney(amount)} ₽</span>
+                </div>
+                <div className="h-2 rounded-full bg-background overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-accent"
+                    style={{ width: `${width}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <button
+        onClick={handleExport}
+        disabled={exporting}
+        className="rounded-2xl border border-card-border bg-card py-3 font-medium disabled:opacity-50"
+      >
+        {exporting ? "Отправляю…" : "📊 Выгрузить отчёт в Excel"}
+      </button>
+      {exportMessage && <p className="text-muted text-sm text-center">{exportMessage}</p>}
     </main>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <AuthGate>
+      <DashboardContent />
+    </AuthGate>
   );
 }
