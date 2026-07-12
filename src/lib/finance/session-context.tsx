@@ -25,6 +25,7 @@ type SessionContextValue = {
   profile: Profile | null;
   supabase: SupabaseClient;
   refreshProfile: () => Promise<void>;
+  waitForPremium: () => Promise<boolean>;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -50,6 +51,30 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       .maybeSingle();
 
     if (data) setProfile(data as Profile);
+  }
+
+  async function waitForPremium(): Promise<boolean> {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const { data } = await supabase
+        .from("profiles")
+        .select(PROFILE_COLUMNS)
+        .eq("auth_user_id", user.id)
+        .maybeSingle();
+
+      if (data) {
+        setProfile(data as Profile);
+        if ((data as Profile).is_premium) return true;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    return false;
   }
 
   useEffect(() => {
@@ -111,7 +136,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <SessionContext.Provider value={{ status, profile, supabase, refreshProfile }}>
+    <SessionContext.Provider value={{ status, profile, supabase, refreshProfile, waitForPremium }}>
       {children}
     </SessionContext.Provider>
   );

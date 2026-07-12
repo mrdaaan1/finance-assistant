@@ -29,7 +29,7 @@ function catMoodForStreak(streak: number): CatMood {
 }
 
 function DashboardContent() {
-  const { supabase, profile, refreshProfile } = useSession();
+  const { supabase, profile, refreshProfile, waitForPremium } = useSession();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [plannedIncome, setPlannedIncome] = useState(0);
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
@@ -55,11 +55,13 @@ function DashboardContent() {
       return;
     }
 
-    window.Telegram?.WebApp?.openInvoice(data.invoiceLink, (status) => {
-      setBuyingPremium(false);
+    window.Telegram?.WebApp?.openInvoice(data.invoiceLink, async (status) => {
       if (status === "paid") {
-        refreshProfile();
+        // Вебхук от Telegram обрабатывается на сервере асинхронно и может
+        // занять секунду-другую — подождём, пока is_premium реально станет true.
+        await waitForPremium();
       }
+      setBuyingPremium(false);
     });
   }
 
