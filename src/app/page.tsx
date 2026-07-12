@@ -116,7 +116,7 @@ function DashboardContent() {
           <h1 className="text-xl font-bold">Привет, {profile?.display_name ?? profile?.first_name}!</h1>
           <p className="text-muted text-sm">Твой финансовый дашборд</p>
         </div>
-        <CatMascot mood={catMoodForStreak(streak)} size={64} />
+        <CatMascot mood={catMoodForStreak(streak)} size={64} interactive />
       </div>
 
       <div className="rounded-2xl bg-gradient-to-br from-accent to-accent-dark text-white p-5 shadow-sm flex items-center justify-between">
