@@ -2,14 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { AuthGate } from "@/components/AuthGate";
+import { MoneyInput } from "@/components/MoneyInput";
+import { SegmentedSelect } from "@/components/SegmentedSelect";
 import { useSession } from "@/lib/finance/session-context";
-import { buildMonthlyProjection, findMonthGoalReached } from "@/lib/finance/projection";
-import type {
-  FinancialPlanEvent,
-  Goal,
-  GoalType,
-  RecurringExpense,
-} from "@/lib/finance/types";
+import { buildGoalProjection } from "@/lib/finance/projection";
+import { todayLocalDateString } from "@/lib/finance/date-utils";
+import type { Goal, RecurringExpense, Transaction } from "@/lib/finance/types";
 
 function formatMoney(amount: number) {
   return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(amount);
@@ -25,41 +23,49 @@ function GoalsPageContent() {
 
   const [goals, setGoals] = useState<Goal[]>([]);
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
-  const [planEvents, setPlanEvents] = useState<FinancialPlanEvent[]>([]);
+  const [savingsByGoal, setSavingsByGoal] = useState<Record<string, number>>({});
   const [currentIncome, setCurrentIncome] = useState<number | null>(null);
 
   const [goalName, setGoalName] = useState("");
   const [goalAmount, setGoalAmount] = useState("");
-  const [goalType, setGoalType] = useState<GoalType>("savings");
+  const [goalContribution, setGoalContribution] = useState("");
   const [goalSubmitting, setGoalSubmitting] = useState(false);
 
   const [incomeInput, setIncomeInput] = useState("");
   const [expenseName, setExpenseName] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
+  const [expenseDuration, setExpenseDuration] = useState<"forever" | "limited">("forever");
+  const [expenseMonths, setExpenseMonths] = useState("12");
 
   async function loadAll() {
-    const [{ data: goalsData }, { data: recurringData }, { data: eventsData }] =
+    const [{ data: goalsData }, { data: recurringData }, { data: eventsData }, { data: savingTxs }] =
       await Promise.all([
         supabase.from("goals").select("*").eq("status", "active").order("created_at"),
-        supabase.from("recurring_expenses").select("*").order("starts_on"),
         supabase
-          .from("financial_plan_events")
+          .from("recurring_expenses")
           .select("*")
-          .order("effective_from"),
+          .eq("is_active", true)
+          .order("starts_on"),
+        supabase.from("financial_plan_events").select("*").order("effective_from"),
+        supabase.from("transactions").select("goal_id, amount").eq("kind", "saving"),
       ]);
 
     if (goalsData) setGoals(goalsData as Goal[]);
     if (recurringData) setRecurringExpenses(recurringData as RecurringExpense[]);
     if (eventsData) {
-      const events = eventsData as FinancialPlanEvent[];
-      setPlanEvents(events);
-      const incomeEvents = events.filter((e) => e.event_type === "income_change");
+      const incomeEvents = (eventsData as { event_type: string; payload: { new_monthly_income?: number } }[])
+        .filter((e) => e.event_type === "income_change");
       if (incomeEvents.length > 0) {
-        const latest = incomeEvents[incomeEvents.length - 1];
-        if (latest.event_type === "income_change") {
-          setCurrentIncome(latest.payload.new_monthly_income);
-        }
+        setCurrentIncome(incomeEvents[incomeEvents.length - 1].payload.new_monthly_income ?? null);
       }
+    }
+    if (savingTxs) {
+      const totals: Record<string, number> = {};
+      for (const tx of savingTxs as { goal_id: string | null; amount: number }[]) {
+        if (!tx.goal_id) continue;
+        totals[tx.goal_id] = (totals[tx.goal_id] ?? 0) + tx.amount;
+      }
+      setSavingsByGoal(totals);
     }
   }
 
@@ -75,7 +81,7 @@ function GoalsPageContent() {
     await supabase.from("financial_plan_events").insert({
       user_id: profile.id,
       event_type: "income_change",
-      effective_from: new Date().toISOString().slice(0, 10),
+      effective_from: todayLocalDateString(),
       payload: { new_monthly_income: Number(incomeInput) },
     });
 
@@ -91,11 +97,19 @@ function GoalsPageContent() {
       user_id: profile.id,
       name: expenseName,
       amount: Number(expenseAmount),
-      starts_on: new Date().toISOString().slice(0, 10),
+      starts_on: todayLocalDateString(),
+      duration_months: expenseDuration === "limited" ? Number(expenseMonths) : null,
     });
 
     setExpenseName("");
     setExpenseAmount("");
+    setExpenseDuration("forever");
+    setExpenseMonths("12");
+    await loadAll();
+  }
+
+  async function handleDeleteRecurringExpense(id: string) {
+    await supabase.from("recurring_expenses").delete().eq("id", id);
     await loadAll();
   }
 
@@ -108,26 +122,29 @@ function GoalsPageContent() {
       user_id: profile.id,
       name: goalName,
       target_amount: Number(goalAmount),
-      goal_type: goalType,
+      monthly_contribution: Number(goalContribution) || 0,
     });
     setGoalSubmitting(false);
 
     setGoalName("");
     setGoalAmount("");
+    setGoalContribution("");
     await loadAll();
+  }
+
+  async function handleDeleteGoal(id: string) {
+    await supabase.from("goals").delete().eq("id", id);
+    await loadAll();
+  }
+
+  async function handleUpdateContribution(goal: Goal, value: string) {
+    const amount = Number(value) || 0;
+    await supabase.from("goals").update({ monthly_contribution: amount }).eq("id", goal.id);
+    setGoals((prev) => prev.map((g) => (g.id === goal.id ? { ...g, monthly_contribution: amount } : g)));
   }
 
   const monthlyIncome = currentIncome ?? 0;
   const monthlyExpenses = recurringExpenses.reduce((sum, r) => sum + r.amount, 0);
-
-  const projection = buildMonthlyProjection({
-    currentMonthlyIncome: monthlyIncome,
-    currentMonthlyExpenses: monthlyExpenses,
-    startingSavings: 0,
-    recurringExpenses,
-    planEvents,
-    horizonMonths: 240,
-  });
 
   return (
     <main className="flex-1 flex flex-col px-4 py-6 gap-6 max-w-md mx-auto w-full">
@@ -139,18 +156,13 @@ function GoalsPageContent() {
           {monthlyIncome > 0 ? `${formatMoney(monthlyIncome)} ₽/мес` : "Не указан"}
         </p>
         <form onSubmit={handleSetIncome} className="flex gap-2">
-          <input
-            type="number"
-            inputMode="decimal"
-            placeholder="Новая зарплата, ₽/мес"
+          <MoneyInput
             value={incomeInput}
-            onChange={(e) => setIncomeInput(e.target.value)}
-            className="flex-1 rounded-xl border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+            onChange={setIncomeInput}
+            placeholder="Новая зарплата"
+            className="flex-1 rounded-xl border border-card-border bg-background px-3 py-2 pr-8 text-sm outline-none focus:border-accent w-full"
           />
-          <button
-            type="submit"
-            className="rounded-xl bg-accent text-white px-4 text-sm font-medium"
-          >
+          <button type="submit" className="rounded-xl bg-accent text-white px-4 text-sm font-medium">
             Указать
           </button>
         </form>
@@ -161,9 +173,23 @@ function GoalsPageContent() {
         <p className="text-lg font-bold">{formatMoney(monthlyExpenses)} ₽/мес</p>
         <div className="flex flex-col gap-1">
           {recurringExpenses.map((r) => (
-            <div key={r.id} className="flex justify-between text-sm">
-              <span>{r.name}</span>
-              <span className="font-medium">{formatMoney(r.amount)} ₽</span>
+            <div key={r.id} className="flex justify-between items-center text-sm">
+              <div className="flex flex-col">
+                <span>{r.name}</span>
+                <span className="text-xs text-muted">
+                  {r.duration_months ? `ещё ${r.duration_months} мес.` : "постоянно"}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="font-medium">{formatMoney(r.amount)} ₽</span>
+                <button
+                  onClick={() => handleDeleteRecurringExpense(r.id)}
+                  aria-label="Удалить"
+                  className="text-muted hover:text-red-500 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -175,22 +201,37 @@ function GoalsPageContent() {
             onChange={(e) => setExpenseName(e.target.value)}
             className="rounded-xl border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
           />
-          <div className="flex gap-2">
+          <MoneyInput
+            value={expenseAmount}
+            onChange={setExpenseAmount}
+            placeholder="Сумма в месяц"
+            className="rounded-xl border border-card-border bg-background px-3 py-2 pr-8 text-sm outline-none focus:border-accent w-full"
+          />
+          <SegmentedSelect
+            options={[
+              { value: "forever" as const, label: "Постоянно" },
+              { value: "limited" as const, label: "Ограниченный срок" },
+            ]}
+            value={expenseDuration}
+            onChange={setExpenseDuration}
+            columns={2}
+          />
+          {expenseDuration === "limited" && (
             <input
               type="number"
-              inputMode="decimal"
-              placeholder="Сумма, ₽/мес"
-              value={expenseAmount}
-              onChange={(e) => setExpenseAmount(e.target.value)}
-              className="flex-1 rounded-xl border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+              min="1"
+              placeholder="Сколько месяцев"
+              value={expenseMonths}
+              onChange={(e) => setExpenseMonths(e.target.value)}
+              className="rounded-xl border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
             />
-            <button
-              type="submit"
-              className="rounded-xl bg-accent text-white px-4 text-sm font-medium"
-            >
-              Добавить
-            </button>
-          </div>
+          )}
+          <button
+            type="submit"
+            className="rounded-xl bg-accent text-white py-2 text-sm font-medium"
+          >
+            Добавить
+          </button>
         </form>
       </section>
 
@@ -204,22 +245,18 @@ function GoalsPageContent() {
             onChange={(e) => setGoalName(e.target.value)}
             className="rounded-xl border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
           />
-          <input
-            type="number"
-            inputMode="decimal"
-            placeholder="Нужная сумма, ₽"
+          <MoneyInput
             value={goalAmount}
-            onChange={(e) => setGoalAmount(e.target.value)}
-            className="rounded-xl border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+            onChange={setGoalAmount}
+            placeholder="Нужная сумма"
+            className="rounded-xl border border-card-border bg-background px-3 py-2 pr-8 text-sm outline-none focus:border-accent w-full"
           />
-          <select
-            value={goalType}
-            onChange={(e) => setGoalType(e.target.value as GoalType)}
-            className="rounded-xl border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-          >
-            <option value="savings">Накопление</option>
-            <option value="down_payment">Первоначальный взнос</option>
-          </select>
+          <MoneyInput
+            value={goalContribution}
+            onChange={setGoalContribution}
+            placeholder="Сколько откладывать в месяц"
+            className="rounded-xl border border-card-border bg-background px-3 py-2 pr-8 text-sm outline-none focus:border-accent w-full"
+          />
           <button
             type="submit"
             disabled={goalSubmitting}
@@ -232,24 +269,61 @@ function GoalsPageContent() {
 
       <section className="flex flex-col gap-3">
         {goals.map((goal) => {
-          const reachedPoint = findMonthGoalReached(projection, goal.target_amount);
+          const alreadySaved = savingsByGoal[goal.id] ?? 0;
+          const { reachedAt } = buildGoalProjection(
+            alreadySaved,
+            goal.monthly_contribution,
+            goal.target_amount,
+          );
+          const progressPct = Math.min(100, Math.round((alreadySaved / goal.target_amount) * 100));
+
           return (
             <div
               key={goal.id}
-              className="rounded-2xl bg-card border border-card-border p-4 flex flex-col gap-2"
+              className="rounded-2xl bg-card border border-card-border p-4 flex flex-col gap-3"
             >
-              <p className="font-semibold">{goal.name}</p>
-              <p className="text-muted text-sm">
-                Нужно накопить {formatMoney(goal.target_amount)} ₽
-              </p>
-              {reachedPoint ? (
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="font-semibold">{goal.name}</p>
+                  <p className="text-muted text-sm">
+                    {formatMoney(alreadySaved)} из {formatMoney(goal.target_amount)} ₽
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleDeleteGoal(goal.id)}
+                  aria-label="Удалить цель"
+                  className="text-muted hover:text-red-500 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="h-2 rounded-full bg-background overflow-hidden">
+                <div className="h-full rounded-full bg-accent" style={{ width: `${progressPct}%` }} />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted">Откладываю в месяц:</span>
+                <MoneyInput
+                  value={String(goal.monthly_contribution || "")}
+                  onChange={(v) => handleUpdateContribution(goal, v)}
+                  placeholder="0"
+                  className="flex-1 rounded-lg border border-card-border bg-background px-2 py-1 pr-6 text-sm outline-none focus:border-accent w-full"
+                />
+              </div>
+
+              {goal.monthly_contribution <= 0 ? (
+                <p className="text-muted text-sm">
+                  Укажи сумму ежемесячного отложения, чтобы увидеть прогноз
+                </p>
+              ) : reachedAt ? (
                 <p className="text-accent font-bold">
-                  Достижимо к {MONTH_NAMES[reachedPoint.month - 1]} {reachedPoint.year}
+                  При {formatMoney(goal.monthly_contribution)} ₽/мес достигнешь цели в{" "}
+                  {MONTH_NAMES[reachedAt.month - 1]} {reachedAt.year}
                 </p>
               ) : (
                 <p className="text-muted text-sm">
-                  При текущих доходах и тратах цель не достигается за 20 лет — укажи
-                  доход и расходы точнее
+                  При текущей сумме отложения цель не достигается за 30 лет
                 </p>
               )}
             </div>

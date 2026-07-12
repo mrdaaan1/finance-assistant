@@ -6,6 +6,25 @@ export type TelegramUser = {
   photo_url?: string;
 };
 
+export const AVATAR_OPTIONS = [
+  { key: "cat", emoji: "🐱" },
+  { key: "fox", emoji: "🦊" },
+  { key: "panda", emoji: "🐼" },
+  { key: "owl", emoji: "🦉" },
+  { key: "rabbit", emoji: "🐰" },
+  { key: "koala", emoji: "🐨" },
+  { key: "tiger", emoji: "🐯" },
+  { key: "penguin", emoji: "🐧" },
+  { key: "hedgehog", emoji: "🦔" },
+  { key: "frog", emoji: "🐸" },
+] as const;
+
+export type AvatarKey = (typeof AVATAR_OPTIONS)[number]["key"];
+
+export function avatarEmoji(key: string | null): string {
+  return AVATAR_OPTIONS.find((a) => a.key === key)?.emoji ?? "🐱";
+}
+
 export type Profile = {
   id: string;
   telegram_id: number;
@@ -13,6 +32,9 @@ export type Profile = {
   first_name: string;
   last_name: string | null;
   avatar_url: string | null;
+  display_name: string | null;
+  avatar_key: string | null;
+  onboarded: boolean;
   current_streak: number;
   longest_streak: number;
   last_active_date: string | null;
@@ -24,13 +46,13 @@ export type TelegramAuthResponse = {
   refresh_token: string;
 };
 
-export type TransactionKind = "expense" | "income";
+export type TransactionKind = "expense" | "income" | "saving";
 
 export type Category = {
   id: string;
   user_id: string | null;
   name: string;
-  kind: TransactionKind;
+  kind: "expense" | "income";
   icon: string | null;
   is_system: boolean;
 };
@@ -39,6 +61,7 @@ export type Transaction = {
   id: string;
   user_id: string;
   category_id: string | null;
+  goal_id: string | null;
   kind: TransactionKind;
   amount: number;
   occurred_on: string;
@@ -54,6 +77,8 @@ export type RecurringExpense = {
   amount: number;
   starts_on: string;
   ends_on: string | null;
+  duration_months: number | null;
+  is_active: boolean;
 };
 
 export type IncomeChangePayload = {
@@ -97,7 +122,6 @@ export type FinancialPlanEvent =
       payload: LoanPayload;
     };
 
-export type GoalType = "savings" | "down_payment";
 export type GoalStatus = "active" | "achieved" | "archived";
 
 export type Goal = {
@@ -106,8 +130,7 @@ export type Goal = {
   name: string;
   target_amount: number;
   target_date: string | null;
-  goal_type: GoalType;
-  linked_loan_event_id: string | null;
+  monthly_contribution: number;
   status: GoalStatus;
   created_at: string;
 };

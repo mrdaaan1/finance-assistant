@@ -2,9 +2,10 @@
 
 import { useSession } from "@/lib/finance/session-context";
 import { CatMascot } from "./CatMascot";
+import { OnboardingScreen } from "./OnboardingScreen";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  const { status } = useSession();
+  const { status, profile } = useSession();
 
   if (status === "loading") {
     return (
@@ -25,6 +26,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         </p>
       </main>
     );
+  }
+
+  if (profile && !profile.onboarded) {
+    return <OnboardingScreen />;
   }
 
   return <>{children}</>;

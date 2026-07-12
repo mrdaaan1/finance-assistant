@@ -161,3 +161,51 @@ export function findMonthGoalReached(
 ): MonthlyProjectionPoint | null {
   return projection.find((point) => point.cumulativeSavings >= targetAmount) ?? null;
 }
+
+export type GoalMonthlyPoint = {
+  monthIndex: number;
+  year: number;
+  month: number;
+  cumulativeSaved: number;
+};
+
+export function buildGoalProjection(
+  alreadySaved: number,
+  monthlyContribution: number,
+  targetAmount: number,
+  startDate: Date = new Date(),
+  maxMonths = 360,
+): { points: GoalMonthlyPoint[]; reachedAt: GoalMonthlyPoint | null } {
+  const points: GoalMonthlyPoint[] = [];
+  let cumulative = alreadySaved;
+  let reachedAt: GoalMonthlyPoint | null = null;
+
+  if (alreadySaved >= targetAmount) {
+    const cursor = addMonths(startDate, 0);
+    reachedAt = { monthIndex: 0, year: cursor.getFullYear(), month: cursor.getMonth() + 1, cumulativeSaved: cumulative };
+    return { points, reachedAt };
+  }
+
+  if (monthlyContribution <= 0) {
+    return { points, reachedAt: null };
+  }
+
+  for (let monthIndex = 1; monthIndex <= maxMonths; monthIndex++) {
+    const cursor = addMonths(startDate, monthIndex);
+    cumulative += monthlyContribution;
+
+    const point: GoalMonthlyPoint = {
+      monthIndex,
+      year: cursor.getFullYear(),
+      month: cursor.getMonth() + 1,
+      cumulativeSaved: cumulative,
+    };
+    points.push(point);
+
+    if (!reachedAt && cumulative >= targetAmount) {
+      reachedAt = point;
+    }
+  }
+
+  return { points, reachedAt };
+}

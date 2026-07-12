@@ -2,12 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { AuthGate } from "@/components/AuthGate";
+import { MoneyInput } from "@/components/MoneyInput";
+import { SegmentedSelect } from "@/components/SegmentedSelect";
 import { useSession } from "@/lib/finance/session-context";
 import type { Asset, AssetType } from "@/lib/finance/types";
 
 function formatMoney(amount: number) {
   return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(amount);
 }
+
+const ASSET_TYPE_OPTIONS: { value: AssetType; label: string; icon: string }[] = [
+  { value: "real_estate", label: "Недвижимость", icon: "🏠" },
+  { value: "car", label: "Автомобиль", icon: "🚗" },
+  { value: "gadget", label: "Гаджет", icon: "📱" },
+  { value: "other", label: "Другое", icon: "💼" },
+];
 
 const ASSET_TYPE_LABELS: Record<AssetType, string> = {
   real_estate: "Недвижимость",
@@ -60,6 +69,11 @@ function AssetsPageContent() {
     await loadAssets();
   }
 
+  async function handleDelete(id: string) {
+    await supabase.from("assets").delete().eq("id", id);
+    await loadAssets();
+  }
+
   const totalValue = assets.reduce((sum, a) => sum + a.current_value, 0);
 
   return (
@@ -76,17 +90,7 @@ function AssetsPageContent() {
         className="rounded-2xl bg-card border border-card-border p-4 flex flex-col gap-3"
       >
         <p className="font-semibold">Добавить актив</p>
-        <select
-          value={assetType}
-          onChange={(e) => setAssetType(e.target.value as AssetType)}
-          className="rounded-xl border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
-        >
-          {(Object.keys(ASSET_TYPE_LABELS) as AssetType[]).map((type) => (
-            <option key={type} value={type}>
-              {ASSET_TYPE_LABELS[type]}
-            </option>
-          ))}
-        </select>
+        <SegmentedSelect options={ASSET_TYPE_OPTIONS} value={assetType} onChange={setAssetType} columns={4} />
         <input
           type="text"
           placeholder="Название (например, Квартира на Ленина)"
@@ -94,13 +98,11 @@ function AssetsPageContent() {
           onChange={(e) => setName(e.target.value)}
           className="rounded-xl border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
         />
-        <input
-          type="number"
-          inputMode="decimal"
-          placeholder="Текущая стоимость, ₽"
+        <MoneyInput
           value={value}
-          onChange={(e) => setValue(e.target.value)}
-          className="rounded-xl border border-card-border bg-background px-3 py-2 text-sm outline-none focus:border-accent"
+          onChange={setValue}
+          placeholder="Текущая стоимость"
+          className="rounded-xl border border-card-border bg-background px-3 py-2 pr-8 text-sm outline-none focus:border-accent w-full"
         />
         <button
           type="submit"
@@ -124,7 +126,16 @@ function AssetsPageContent() {
                 <span className="text-xs text-muted">{ASSET_TYPE_LABELS[asset.asset_type]}</span>
               </div>
             </div>
-            <span className="font-semibold">{formatMoney(asset.current_value)} ₽</span>
+            <div className="flex items-center gap-3">
+              <span className="font-semibold">{formatMoney(asset.current_value)} ₽</span>
+              <button
+                onClick={() => handleDelete(asset.id)}
+                aria-label="Удалить"
+                className="text-muted hover:text-red-500 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         ))}
         {assets.length === 0 && (

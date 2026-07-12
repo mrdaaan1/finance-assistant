@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AuthGate } from "@/components/AuthGate";
 import { CatMascot } from "@/components/CatMascot";
 import { useSession } from "@/lib/finance/session-context";
-import type { Profile } from "@/lib/finance/types";
+import { avatarEmoji, type Profile } from "@/lib/finance/types";
 
 function LeaderboardPageContent() {
   const { supabase, profile } = useSession();
@@ -15,8 +15,9 @@ function LeaderboardPageContent() {
       const { data } = await supabase
         .from("profiles")
         .select(
-          "id, telegram_id, username, first_name, last_name, avatar_url, current_streak, longest_streak, last_active_date, created_at",
+          "id, telegram_id, username, first_name, last_name, avatar_url, display_name, avatar_key, onboarded, current_streak, longest_streak, last_active_date, created_at",
         )
+        .eq("onboarded", true)
         .order("current_streak", { ascending: false })
         .order("longest_streak", { ascending: false });
 
@@ -46,23 +47,11 @@ function LeaderboardPageContent() {
               }`}
             >
               <span className="text-sm font-semibold text-muted w-6">{index + 1}</span>
-              {p.avatar_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={p.avatar_url}
-                  alt=""
-                  className="w-9 h-9 rounded-full object-cover"
-                />
-              ) : (
-                <div className="w-9 h-9 rounded-full bg-accent/20 flex items-center justify-center font-semibold text-accent">
-                  {p.first_name.charAt(0).toUpperCase()}
-                </div>
-              )}
+              <div className="w-9 h-9 rounded-full bg-accent/20 flex items-center justify-center text-xl">
+                {avatarEmoji(p.avatar_key)}
+              </div>
               <div className="flex flex-col flex-1">
-                <span className="font-medium">
-                  {p.first_name} {p.last_name ?? ""}
-                </span>
-                {p.username && <span className="text-xs text-muted">@{p.username}</span>}
+                <span className="font-medium">{p.display_name ?? "Аноним"}</span>
               </div>
               <div className="flex flex-col items-end">
                 <span className="font-bold">{p.current_streak} 🔥</span>

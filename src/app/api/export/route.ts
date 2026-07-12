@@ -43,10 +43,16 @@ export async function POST() {
 
   type Row = {
     occurred_on: string;
-    kind: "expense" | "income";
+    kind: "expense" | "income" | "saving";
     amount: number;
     comment: string | null;
     category: { name: string } | { name: string }[] | null;
+  };
+
+  const KIND_LABELS: Record<Row["kind"], string> = {
+    expense: "Расход",
+    income: "Доход",
+    saving: "Отложение",
   };
 
   for (const tx of (transactions ?? []) as Row[]) {
@@ -60,7 +66,7 @@ export async function POST() {
         month: "long",
         year: "numeric",
       }),
-      kind: tx.kind === "expense" ? "Расход" : "Доход",
+      kind: KIND_LABELS[tx.kind],
       category: categoryName ?? "Без категории",
       amount: tx.amount,
       comment: tx.comment ?? "",

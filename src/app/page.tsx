@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AuthGate } from "@/components/AuthGate";
 import { CatMascot, type CatMood } from "@/components/CatMascot";
 import { useSession } from "@/lib/finance/session-context";
-import type { Transaction } from "@/lib/finance/types";
+import type { RecurringExpense, Transaction } from "@/lib/finance/types";
 
 function formatMoney(amount: number) {
   return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(amount);
@@ -31,6 +31,8 @@ function catMoodForStreak(streak: number): CatMood {
 function DashboardContent() {
   const { supabase, profile } = useSession();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [plannedIncome, setPlannedIncome] = useState(0);
+  const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
 
@@ -45,13 +47,28 @@ function DashboardContent() {
   useEffect(() => {
     async function load() {
       const monthAgo = startOfMonth(new Date()).toISOString().slice(0, 10);
-      const { data } = await supabase
-        .from("transactions")
-        .select("id, user_id, category_id, kind, amount, occurred_on, comment, created_at, category:categories(id, user_id, name, kind, icon, is_system)")
-        .gte("occurred_on", monthAgo)
-        .order("occurred_on", { ascending: false });
+      const [{ data: txs }, { data: events }, { data: recurring }] = await Promise.all([
+        supabase
+          .from("transactions")
+          .select(
+            "id, user_id, category_id, goal_id, kind, amount, occurred_on, comment, created_at, category:categories(id, user_id, name, kind, icon, is_system)",
+          )
+          .gte("occurred_on", monthAgo)
+          .order("occurred_on", { ascending: false }),
+        supabase
+          .from("financial_plan_events")
+          .select("event_type, payload, effective_from")
+          .eq("event_type", "income_change")
+          .order("effective_from", { ascending: true }),
+        supabase.from("recurring_expenses").select("*").eq("is_active", true),
+      ]);
 
-      if (data) setTransactions(data as unknown as Transaction[]);
+      if (txs) setTransactions(txs as unknown as Transaction[]);
+      if (events && events.length > 0) {
+        const latest = events[events.length - 1] as { payload: { new_monthly_income: number } };
+        setPlannedIncome(latest.payload.new_monthly_income);
+      }
+      if (recurring) setRecurringExpenses(recurring as RecurringExpense[]);
     }
     load();
   }, [supabase]);
@@ -63,7 +80,7 @@ function DashboardContent() {
 
     let weekExpenses = 0;
     let monthExpenses = 0;
-    let monthIncome = 0;
+    let extraMonthIncome = 0;
     const byCategory = new Map<string, number>();
 
     for (const tx of transactions) {
@@ -74,8 +91,8 @@ function DashboardContent() {
 
         const name = tx.category?.name ?? "Без категории";
         byCategory.set(name, (byCategory.get(name) ?? 0) + tx.amount);
-      } else {
-        if (occurred >= monthStart) monthIncome += tx.amount;
+      } else if (tx.kind === "income") {
+        if (occurred >= monthStart) extraMonthIncome += tx.amount;
       }
     }
 
@@ -83,8 +100,11 @@ function DashboardContent() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5);
 
-    return { weekExpenses, monthExpenses, monthIncome, topCategories };
+    return { weekExpenses, monthExpenses, extraMonthIncome, topCategories };
   }, [transactions]);
+
+  const plannedExpenses = recurringExpenses.reduce((sum, r) => sum + r.amount, 0);
+  const totalMonthIncome = plannedIncome + stats.extraMonthIncome;
 
   const streak = profile?.current_streak ?? 0;
   const longestStreak = profile?.longest_streak ?? 0;
@@ -93,7 +113,7 @@ function DashboardContent() {
     <main className="flex-1 flex flex-col px-4 py-6 gap-5 max-w-md mx-auto w-full">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Привет, {profile?.first_name}!</h1>
+          <h1 className="text-xl font-bold">Привет, {profile?.display_name ?? profile?.first_name}!</h1>
           <p className="text-muted text-sm">Твой финансовый дашборд</p>
         </div>
         <CatMascot mood={catMoodForStreak(streak)} size={64} />
@@ -105,20 +125,23 @@ function DashboardContent() {
           <p className="text-3xl font-extrabold">{streak} 🔥</p>
           <p className="text-white/70 text-xs mt-1">Рекорд: {longestStreak} дней</p>
         </div>
-        <p className="text-white/80 text-xs max-w-[40%] text-right">
-          Вноси хотя бы одну операцию каждый день, чтобы не потерять серию
-        </p>
+        <p className="text-white/80 text-xs max-w-[40%] text-right">Не пропусти день!</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl bg-card border border-card-border p-4">
           <p className="text-muted text-xs">Доход за месяц</p>
-          <p className="text-lg font-bold text-emerald-500">+{formatMoney(stats.monthIncome)} ₽</p>
+          <p className="text-lg font-bold text-emerald-500">+{formatMoney(totalMonthIncome)} ₽</p>
         </div>
         <div className="rounded-2xl bg-card border border-card-border p-4">
           <p className="text-muted text-xs">Расход за месяц</p>
           <p className="text-lg font-bold">−{formatMoney(stats.monthExpenses)} ₽</p>
         </div>
+      </div>
+
+      <div className="rounded-2xl bg-card border border-card-border p-4">
+        <p className="text-muted text-xs mb-1">Планируемые ежемесячные расходы</p>
+        <p className="text-2xl font-extrabold">{formatMoney(plannedExpenses)} ₽</p>
       </div>
 
       <div className="rounded-2xl bg-card border border-card-border p-4">
