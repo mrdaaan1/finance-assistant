@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { AuthGate } from "@/components/AuthGate";
 import { CatMascot, type CatMood } from "@/components/CatMascot";
+import { DailyFlowChart, type DailyFlowPoint } from "@/components/DailyFlowChart";
 import { useSession } from "@/lib/finance/session-context";
+import { toLocalDateString } from "@/lib/finance/date-utils";
 import type { RecurringExpense, Transaction } from "@/lib/finance/types";
 
 function formatMoney(amount: number) {
@@ -20,6 +22,31 @@ function startOfWeek(date: Date) {
 
 function startOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function startOfYear(date: Date) {
+  return new Date(date.getFullYear(), 0, 1);
+}
+
+function buildDailyFlow(transactions: Transaction[], from: Date, to: Date): DailyFlowPoint[] {
+  const byDate = new Map<string, DailyFlowPoint>();
+  const cursor = new Date(from);
+
+  while (cursor <= to) {
+    const key = toLocalDateString(cursor);
+    byDate.set(key, { date: key, income: 0, expense: 0, saving: 0 });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  for (const tx of transactions) {
+    const point = byDate.get(tx.occurred_on);
+    if (!point) continue;
+    if (tx.kind === "income") point.income += tx.amount;
+    else if (tx.kind === "expense") point.expense += tx.amount;
+    else if (tx.kind === "saving") point.saving += tx.amount;
+  }
+
+  return [...byDate.values()];
 }
 
 function catMoodForStreak(streak: number): CatMood {
@@ -67,14 +94,14 @@ function DashboardContent() {
 
   useEffect(() => {
     async function load() {
-      const monthAgo = startOfMonth(new Date()).toISOString().slice(0, 10);
+      const yearStart = toLocalDateString(startOfYear(new Date()));
       const [{ data: txs }, { data: events }, { data: recurring }] = await Promise.all([
         supabase
           .from("transactions")
           .select(
             "id, user_id, category_id, goal_id, kind, amount, occurred_on, comment, created_at, category:categories(id, user_id, name, kind, icon, is_system)",
           )
-          .gte("occurred_on", monthAgo)
+          .gte("occurred_on", yearStart)
           .order("occurred_on", { ascending: false }),
         supabase
           .from("financial_plan_events")
@@ -130,6 +157,11 @@ function DashboardContent() {
   const streak = profile?.current_streak ?? 0;
   const longestStreak = profile?.longest_streak ?? 0;
 
+  const dailyFlow = useMemo(
+    () => buildDailyFlow(transactions, startOfYear(new Date()), new Date()),
+    [transactions],
+  );
+
   return (
     <main className="flex-1 flex flex-col px-4 py-6 gap-5 max-w-md mx-auto w-full">
       <div className="flex items-center justify-between">
@@ -172,6 +204,8 @@ function DashboardContent() {
           <p className="text-lg font-bold">−{formatMoney(stats.monthExpenses)} ₽</p>
         </div>
       </div>
+
+      <DailyFlowChart points={dailyFlow} />
 
       <div className="rounded-2xl bg-card border border-card-border p-4">
         <p className="text-muted text-xs mb-1">Планируемые ежемесячные расходы</p>
