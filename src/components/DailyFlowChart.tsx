@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export type DailyFlowPoint = {
   date: string; // YYYY-MM-DD
@@ -33,14 +33,24 @@ export function DailyFlowChart({ points }: { points: DailyFlowPoint[] }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  function handleWheel(e: React.WheelEvent<HTMLDivElement>) {
-    // На десктопе колесо мыши даёт только вертикальный скролл — конвертируем
-    // его в горизонтальный, если сам жест не был уже горизонтальным (трекпад).
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && scrollRef.current) {
-      e.preventDefault();
-      scrollRef.current.scrollLeft += e.deltaY;
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    // React's onWheel is registered as a passive listener by the browser,
+    // so preventDefault() inside it is silently ignored — a native listener
+    // with { passive: false } is required to actually block vertical scroll
+    // and redirect it horizontally.
+    function handleWheel(e: WheelEvent) {
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && el) {
+        e.preventDefault();
+        el.scrollLeft += e.deltaY;
+      }
     }
-  }
+
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, []);
 
   const maxValue = useMemo(() => {
     const max = Math.max(1, ...points.flatMap((p) => [p.income, p.expense, p.saving]));
@@ -75,7 +85,7 @@ export function DailyFlowChart({ points }: { points: DailyFlowPoint[] }) {
         </div>
       </div>
 
-      <div ref={scrollRef} className="overflow-x-auto scrollbar-none" dir="rtl" onWheel={handleWheel}>
+      <div ref={scrollRef} className="overflow-x-auto scrollbar-none" dir="rtl">
         <div style={{ width: chartWidth, height: CHART_HEIGHT }} className="relative" dir="ltr">
           <svg width={chartWidth} height={CHART_HEIGHT} className="block">
             <line
