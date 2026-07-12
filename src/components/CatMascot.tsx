@@ -125,7 +125,7 @@ export function CatMascot({
               0%, 100% { opacity: 0.25; transform: translateY(0); }
               50% { opacity: 1; transform: translateY(-2px); }
             }
-            .cat-eye { transform-origin: center; animation: cat-blink 4s ease-in-out infinite; }
+            .cat-eye { transform-box: fill-box; transform-origin: center; animation: cat-blink 4s ease-in-out infinite; }
             .cat-tongue { animation: cat-tongue 6s ease-in-out infinite; }
             .cat-body { transform-box: fill-box; transform-origin: 50% 80%; animation: cat-breathe 3.4s ease-in-out infinite; }
             .cat-tail { transform-box: fill-box; transform-origin: 15% 85%; animation: cat-tail-swish 5s ease-in-out infinite; }
@@ -203,11 +203,17 @@ export function CatMascot({
             <path d="M76 65 Q 87 65 94 64" fill="none" />
           </g>
 
-          <g className={animated ? "cat-eye" : undefined} transform="translate(37, 52)">
-            <CatEye eyeOpen={eyeOpen} brow={brows} side="left" />
+          {/* CSS-анимация transform затирает SVG-атрибут transform той же
+              группы, поэтому смещение и моргание живут на разных <g>. */}
+          <g transform="translate(37, 52)">
+            <g className={animated ? "cat-eye" : undefined}>
+              <CatEye eyeOpen={eyeOpen} brow={brows} side="left" />
+            </g>
           </g>
-          <g className={animated ? "cat-eye" : undefined} transform="translate(63, 52)">
-            <CatEye eyeOpen={eyeOpen} brow={brows} side="right" />
+          <g transform="translate(63, 52)">
+            <g className={animated ? "cat-eye" : undefined}>
+              <CatEye eyeOpen={eyeOpen} brow={brows} side="right" />
+            </g>
           </g>
 
           {/* Носик */}
