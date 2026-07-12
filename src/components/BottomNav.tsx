@@ -8,6 +8,7 @@ const items = [
   { href: "/transactions", label: "Траты", icon: "💸" },
   { href: "/goals", label: "Цели", icon: "🎯" },
   { href: "/assets", label: "Активы", icon: "🏦" },
+  { href: "/games", label: "Игры", icon: "🎰" },
   { href: "/leaderboard", label: "Рейтинг", icon: "🔥" },
 ];
 

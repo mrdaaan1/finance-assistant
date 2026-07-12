@@ -37,6 +37,7 @@ export type Profile = {
   avatar_key: string | null;
   onboarded: boolean;
   is_premium: boolean;
+  game_balance: number;
   current_streak: number;
   longest_streak: number;
   last_active_date: string | null;
