@@ -10,9 +10,14 @@ export type ChatMessage = {
 };
 
 export const CHAT_MODEL = process.env.OPENROUTER_CHAT_MODEL ?? "google/gemini-2.5-flash";
-// Транскрибация — тоже Gemini: мультимодальная модель принимает WAV напрямую,
-// отдельный STT-сервис (и отдельный ключ) не нужен.
-export const STT_MODEL = process.env.OPENROUTER_STT_MODEL ?? "google/gemini-2.5-flash-lite";
+// Транскрибация: основная модель — полностью бесплатная (лимит OpenRouter на
+// :free — 50 запросов/день, 1000 при пополненном балансе от 10$). Если она
+// недоступна или перегружена, транскрибируем через дешёвую Gemini
+// (~0,05 ₽ за минуту звука).
+export const STT_MODEL =
+  process.env.OPENROUTER_STT_MODEL ?? "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free";
+export const STT_FALLBACK_MODEL =
+  process.env.OPENROUTER_STT_FALLBACK_MODEL ?? "google/gemini-2.5-flash-lite";
 
 export async function callOpenRouter(model: string, messages: ChatMessage[]): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY;

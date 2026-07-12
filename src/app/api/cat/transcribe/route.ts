@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { callOpenRouter, STT_MODEL } from "@/lib/openrouter";
+import { callOpenRouter, STT_MODEL, STT_FALLBACK_MODEL, type ChatMessage } from "@/lib/openrouter";
 
 export const maxDuration = 30;
 
@@ -19,19 +19,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "audio_required" }, { status: 400 });
   }
 
+  const sttMessages: ChatMessage[] = [
+    {
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: "Расшифруй эту голосовую запись на русском языке. Верни только сам текст сказанного, без кавычек, пояснений и комментариев. Если запись пустая или неразборчивая, верни ровно строку: [неразборчиво]",
+        },
+        { type: "input_audio", input_audio: { data: audio, format: "wav" } },
+      ],
+    },
+  ];
+
   try {
-    const text = await callOpenRouter(STT_MODEL, [
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: "Расшифруй эту голосовую запись на русском языке. Верни только сам текст сказанного, без кавычек, пояснений и комментариев. Если запись пустая или неразборчивая, верни ровно строку: [неразборчиво]",
-          },
-          { type: "input_audio", input_audio: { data: audio, format: "wav" } },
-        ],
-      },
-    ]);
+    let text: string;
+    try {
+      text = await callOpenRouter(STT_MODEL, sttMessages);
+    } catch (freeModelError) {
+      // Бесплатная модель бывает перегружена или упирается в дневной лимит —
+      // тогда пробуем платную, но копеечную.
+      console.warn("free STT model failed, falling back", freeModelError);
+      text = await callOpenRouter(STT_FALLBACK_MODEL, sttMessages);
+    }
 
     if (text === "[неразборчиво]") {
       return NextResponse.json({ error: "unintelligible" }, { status: 422 });
