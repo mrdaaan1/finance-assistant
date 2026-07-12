@@ -10,19 +10,29 @@ export function OnboardingScreen() {
   const [displayName, setDisplayName] = useState("");
   const [avatarKey, setAvatarKey] = useState<AvatarKey>("cat");
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!profile || !displayName.trim()) return;
 
     setSubmitting(true);
-    await supabase
+    setError(null);
+
+    const { data: updated, error: updateError } = await supabase
       .from("profiles")
       .update({ display_name: displayName.trim(), avatar_key: avatarKey, onboarded: true })
-      .eq("id", profile.id);
-    setSubmitting(false);
+      .eq("id", profile.id)
+      .select("id");
+
+    if (updateError || !updated || updated.length === 0) {
+      setError("Не удалось сохранить. Попробуй ещё раз.");
+      setSubmitting(false);
+      return;
+    }
 
     await refreshProfile();
+    setSubmitting(false);
   }
 
   return (
@@ -62,6 +72,8 @@ export function OnboardingScreen() {
             </button>
           ))}
         </div>
+
+        {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
         <button
           type="submit"
