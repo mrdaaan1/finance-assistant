@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { AuthGate } from "@/components/AuthGate";
 import { CatMascot, type CatState } from "@/components/CatMascot";
 import { useSession } from "@/lib/finance/session-context";
@@ -214,7 +215,13 @@ function CatChatContent() {
     <main className="flex-1 flex flex-col max-w-md mx-auto w-full">
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur px-4 pt-4 pb-3 flex flex-col items-center border-b border-card-border">
         <div className="flex w-full items-start justify-between">
-          <div className="w-10" />
+          <Link
+            href="/"
+            aria-label="Назад на дашборд"
+            className="w-10 h-10 rounded-full bg-card border border-card-border flex items-center justify-center text-lg text-muted active:scale-95 transition-transform"
+          >
+            ←
+          </Link>
           <CatMascot mood="happy" state={flowToCatState(flow)} size={120} interactive={flow === "idle"} />
           <button
             onClick={() => {

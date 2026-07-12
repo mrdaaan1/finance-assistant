@@ -7,11 +7,35 @@ export type CatMood = "happy" | "sad" | "sleepy";
 // Живые состояния для голосового чата: приоритетнее mood.
 export type CatState = "idle" | "listening" | "thinking" | "talking";
 
-const moodProps: Record<CatMood, { earColor: string; eye: string; mouth: string }> = {
-  happy: { earColor: "#8b7bf7", eye: "M -6 0 Q -6 -3 -3 -3 Q 0 -3 0 0", mouth: "M -8 6 Q 0 12 8 6" },
-  sad: { earColor: "#6d6a99", eye: "M -6 -1 L 0 -1", mouth: "M -8 9 Q 0 4 8 9" },
-  sleepy: { earColor: "#a596ff", eye: "M -6 0 L 0 0", mouth: "M -4 7 Q 0 9 4 7" },
+const moodProps: Record<CatMood, { earColor: string; mouth: string; eyeOpen: number; brows: boolean }> = {
+  happy: { earColor: "#8b7bf7", mouth: "M -8 6 Q 0 12 8 6", eyeOpen: 1, brows: false },
+  sad: { earColor: "#6d6a99", mouth: "M -8 9 Q 0 4 8 9", eyeOpen: 0.85, brows: true },
+  sleepy: { earColor: "#a596ff", mouth: "M -4 7 Q 0 9 4 7", eyeOpen: 0.45, brows: false },
 };
+
+// Настоящий кошачий глаз: зелёная радужка, вертикальный зрачок, блик.
+// eyeOpen прикрывает веко (scaleY), side наклоняет грустную бровь.
+function CatEye({ eyeOpen, brow, side }: { eyeOpen: number; brow: boolean; side: "left" | "right" }) {
+  const browTilt = side === "left" ? -14 : 14;
+  return (
+    <>
+      <g transform={`scale(1 ${eyeOpen})`}>
+        <ellipse cx="0" cy="0" rx="5.5" ry="6.5" fill="#8ef0b0" stroke="#1c1938" strokeWidth="1" />
+        <ellipse cx="0" cy="0" rx="2" ry="4.6" fill="#1c1938" />
+        <circle cx="-1.8" cy="-2.2" r="1.3" fill="#ffffff" opacity="0.9" />
+      </g>
+      {brow && (
+        <path
+          d="M -5 0 L 5 0"
+          transform={`translate(0 -9) rotate(${browTilt})`}
+          stroke="#f3f2fb"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      )}
+    </>
+  );
+}
 
 const TAP_REACTIONS = ["cat-tap-wiggle", "cat-tap-bounce", "cat-tap-spin"];
 
@@ -30,7 +54,7 @@ export function CatMascot({
   animated?: boolean;
   interactive?: boolean;
 }) {
-  const { earColor, eye, mouth } = moodProps[mood];
+  const { earColor, mouth, eyeOpen, brows } = moodProps[mood];
   const [tapClass, setTapClass] = useState<string | null>(null);
   const [tapKey, setTapKey] = useState(0);
 
@@ -180,10 +204,10 @@ export function CatMascot({
           </g>
 
           <g className={animated ? "cat-eye" : undefined} transform="translate(37, 52)">
-            <path d={eye} stroke="#f3f2fb" strokeWidth="3" strokeLinecap="round" fill="none" />
+            <CatEye eyeOpen={eyeOpen} brow={brows} side="left" />
           </g>
           <g className={animated ? "cat-eye" : undefined} transform="translate(63, 52)">
-            <path d={eye} stroke="#f3f2fb" strokeWidth="3" strokeLinecap="round" fill="none" />
+            <CatEye eyeOpen={eyeOpen} brow={brows} side="right" />
           </g>
 
           {/* Носик */}
