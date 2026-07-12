@@ -15,7 +15,7 @@ function LeaderboardPageContent() {
       const { data } = await supabase
         .from("profiles")
         .select(
-          "id, telegram_id, username, first_name, last_name, avatar_url, display_name, avatar_key, onboarded, current_streak, longest_streak, last_active_date, created_at",
+          "id, telegram_id, username, first_name, last_name, avatar_url, display_name, avatar_key, onboarded, is_premium, current_streak, longest_streak, last_active_date, created_at",
         )
         .eq("onboarded", true)
         .order("current_streak", { ascending: false })
@@ -51,7 +51,10 @@ function LeaderboardPageContent() {
                 {avatarEmoji(p.avatar_key)}
               </div>
               <div className="flex flex-col flex-1">
-                <span className="font-medium">{p.display_name ?? "Аноним"}</span>
+                <span className="font-medium flex items-center gap-1">
+                  {p.display_name ?? "Аноним"}
+                  {p.is_premium && <span title="Premium">⭐</span>}
+                </span>
               </div>
               <div className="flex flex-col items-end">
                 <span className="font-bold">{p.current_streak} 🔥</span>

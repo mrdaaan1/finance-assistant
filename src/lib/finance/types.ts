@@ -36,6 +36,7 @@ export type Profile = {
   display_name: string | null;
   avatar_key: string | null;
   onboarded: boolean;
+  is_premium: boolean;
   current_streak: number;
   longest_streak: number;
   last_active_date: string | null;

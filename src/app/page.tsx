@@ -29,12 +29,13 @@ function catMoodForStreak(streak: number): CatMood {
 }
 
 function DashboardContent() {
-  const { supabase, profile } = useSession();
+  const { supabase, profile, refreshProfile } = useSession();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [plannedIncome, setPlannedIncome] = useState(0);
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [buyingPremium, setBuyingPremium] = useState(false);
 
   async function handleExport() {
     setExporting(true);
@@ -42,6 +43,24 @@ function DashboardContent() {
     const res = await fetch("/api/export", { method: "POST" });
     setExporting(false);
     setExportMessage(res.ok ? "Отчёт отправлен тебе в чат с ботом 📩" : "Не удалось отправить отчёт");
+  }
+
+  async function handleBuyPremium() {
+    setBuyingPremium(true);
+    const res = await fetch("/api/create-invoice", { method: "POST" });
+    const data = await res.json();
+
+    if (!res.ok || !data.invoiceLink) {
+      setBuyingPremium(false);
+      return;
+    }
+
+    window.Telegram?.WebApp?.openInvoice(data.invoiceLink, (status) => {
+      setBuyingPremium(false);
+      if (status === "paid") {
+        refreshProfile();
+      }
+    });
   }
 
   useEffect(() => {
@@ -113,11 +132,24 @@ function DashboardContent() {
     <main className="flex-1 flex flex-col px-4 py-6 gap-5 max-w-md mx-auto w-full">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Привет, {profile?.display_name ?? profile?.first_name}!</h1>
+          <h1 className="text-xl font-bold flex items-center gap-1.5">
+            Привет, {profile?.display_name ?? profile?.first_name}!
+            {profile?.is_premium && <span title="Premium">⭐</span>}
+          </h1>
           <p className="text-muted text-sm">Твой финансовый дашборд</p>
         </div>
         <CatMascot mood={catMoodForStreak(streak)} size={64} interactive />
       </div>
+
+      {!profile?.is_premium && (
+        <button
+          onClick={handleBuyPremium}
+          disabled={buyingPremium}
+          className="rounded-2xl border border-accent/40 bg-accent/10 py-3 font-medium text-accent disabled:opacity-50"
+        >
+          {buyingPremium ? "Открываю оплату…" : "⭐ Получить Premium за 5 звёзд"}
+        </button>
+      )}
 
       <div className="rounded-2xl bg-gradient-to-br from-accent to-accent-dark text-white p-5 shadow-sm flex items-center justify-between">
         <div>
