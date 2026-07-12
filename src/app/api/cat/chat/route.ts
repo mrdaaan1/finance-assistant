@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { callOpenRouter, CHAT_MODEL, type ChatMessage } from "@/lib/openrouter";
+import { callOpenRouter, CHAT_MODEL, CHAT_FALLBACK_MODEL, type ChatMessage } from "@/lib/openrouter";
 
 export const maxDuration = 30;
 
@@ -158,11 +158,16 @@ ${assetLines || "  не указаны"}`;
     content: String(m.content).slice(0, 2000),
   }));
 
+  const chatMessages: ChatMessage[] = [{ role: "system", content: systemPrompt }, ...history];
+
   try {
-    const reply = await callOpenRouter(CHAT_MODEL, [
-      { role: "system", content: systemPrompt },
-      ...history,
-    ]);
+    let reply: string;
+    try {
+      reply = await callOpenRouter(CHAT_MODEL, chatMessages);
+    } catch (primaryError) {
+      console.warn("primary chat model failed, falling back", primaryError);
+      reply = await callOpenRouter(CHAT_FALLBACK_MODEL, chatMessages);
+    }
     return NextResponse.json({ reply });
   } catch (e) {
     console.error("cat chat failed", e);

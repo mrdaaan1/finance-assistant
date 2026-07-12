@@ -9,7 +9,12 @@ export type ChatMessage = {
   content: string | ContentPart[];
 };
 
-export const CHAT_MODEL = process.env.OPENROUTER_CHAT_MODEL ?? "google/gemini-2.5-flash";
+// Мозг кота: Gemini 3 Flash — недорогая (0,5$/M вход, 3$/M выход),
+// но заметно сильнее бесплатных моделей. Если на балансе OpenRouter пусто
+// (402) или модель недоступна, откатываемся на сильную бесплатную.
+export const CHAT_MODEL = process.env.OPENROUTER_CHAT_MODEL ?? "google/gemini-3-flash-preview";
+export const CHAT_FALLBACK_MODEL =
+  process.env.OPENROUTER_CHAT_FALLBACK_MODEL ?? "nvidia/nemotron-3-super-120b-a12b:free";
 // Транскрибация: основная модель — полностью бесплатная (лимит OpenRouter на
 // :free — 50 запросов/день, 1000 при пополненном балансе от 10$). Если она
 // недоступна или перегружена, транскрибируем через дешёвую Gemini
