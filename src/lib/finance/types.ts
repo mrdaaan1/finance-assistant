@@ -17,6 +17,7 @@ export const AVATAR_OPTIONS = [
   { key: "penguin", emoji: "🐧" },
   { key: "hedgehog", emoji: "🦔" },
   { key: "frog", emoji: "🐸" },
+  { key: "capybara", emoji: "🦫" },
 ] as const;
 
 export type AvatarKey = (typeof AVATAR_OPTIONS)[number]["key"];
