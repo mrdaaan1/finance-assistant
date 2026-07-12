@@ -36,6 +36,13 @@ export function DailyFlowChart({ points }: { points: DailyFlowPoint[] }) {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    // Открываем график на сегодняшнем дне (правый край), а не на начале года.
+    el.scrollLeft = el.scrollWidth;
+  }, [points]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
 
     // React's onWheel is registered as a passive listener by the browser,
     // so preventDefault() inside it is silently ignored — a native listener
@@ -85,8 +92,8 @@ export function DailyFlowChart({ points }: { points: DailyFlowPoint[] }) {
         </div>
       </div>
 
-      <div ref={scrollRef} className="overflow-x-auto scrollbar-none" dir="rtl">
-        <div style={{ width: chartWidth, height: CHART_HEIGHT }} className="relative" dir="ltr">
+      <div ref={scrollRef} className="overflow-x-auto scrollbar-none">
+        <div style={{ width: chartWidth, height: CHART_HEIGHT }} className="relative">
           <svg width={chartWidth} height={CHART_HEIGHT} className="block">
             <line
               x1={0}
@@ -108,8 +115,8 @@ export function DailyFlowChart({ points }: { points: DailyFlowPoint[] }) {
                     width={DAY_WIDTH}
                     height={plotHeight}
                     fill="transparent"
-                    onMouseEnter={() => setHoverIndex(i)}
-                    onMouseLeave={() => setHoverIndex(null)}
+                    onMouseMove={() => setHoverIndex(i)}
+                    onMouseLeave={() => setHoverIndex((prev) => (prev === i ? null : prev))}
                     onTouchStart={() => setHoverIndex(i)}
                   />
                   {isHovered && (
@@ -120,6 +127,7 @@ export function DailyFlowChart({ points }: { points: DailyFlowPoint[] }) {
                       height={plotHeight}
                       fill="var(--accent)"
                       opacity={0.06}
+                      pointerEvents="none"
                     />
                   )}
                   {SERIES.map((s, si) => {
@@ -164,6 +172,7 @@ export function DailyFlowChart({ points }: { points: DailyFlowPoint[] }) {
                     textAnchor="middle"
                     fontSize={10}
                     fill="var(--muted)"
+                    pointerEvents="none"
                   >
                     {formatDayLabel(point.date)}
                   </text>
