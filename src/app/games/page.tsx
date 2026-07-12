@@ -36,21 +36,24 @@ function GamesPageContent() {
       setReels([randomSymbol(), randomSymbol(), randomSymbol()]);
     }, 80);
 
-    const res = await fetch("/api/slot-spin", { method: "POST" });
-    const data = await res.json();
+    try {
+      const res = await fetch("/api/slot-spin", { method: "POST" });
+      const data = await res.json();
 
-    window.clearInterval(shuffleInterval);
+      if (!res.ok) {
+        setError(data.error === "insufficient_balance" ? "Недостаточно игровых денег" : "Что-то пошло не так");
+        return;
+      }
 
-    if (!res.ok) {
-      setError(data.error === "insufficient_balance" ? "Недостаточно игровых денег" : "Что-то пошло не так");
+      setReels(data.reels);
+      setResult({ isWin: data.isWin, payout: data.payout });
+      await refreshProfile();
+    } catch {
+      setError("Не удалось связаться с сервером. Попробуй ещё раз.");
+    } finally {
+      window.clearInterval(shuffleInterval);
       setSpinning(false);
-      return;
     }
-
-    setReels(data.reels);
-    setResult({ isWin: data.isWin, payout: data.payout });
-    setSpinning(false);
-    await refreshProfile();
   }
 
   return (
