@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AuthGate } from "@/components/AuthGate";
 import { CatMascot, type CatMood } from "@/components/CatMascot";
+import { EditProfileModal } from "@/components/EditProfileModal";
 import { DailyFlowChart, type DailyFlowPoint } from "@/components/DailyFlowChart";
 import { useSession } from "@/lib/finance/session-context";
 import { usePrivacy, MASKED_AMOUNT } from "@/lib/finance/privacy-context";
@@ -67,6 +68,7 @@ function DashboardContent() {
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [buyingPremium, setBuyingPremium] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
 
   async function handleExport() {
     setExporting(true);
@@ -170,13 +172,18 @@ function DashboardContent() {
   return (
     <main className="flex-1 flex flex-col px-4 py-6 gap-5 max-w-md mx-auto w-full">
       <div className="flex items-center justify-between">
-        <div>
+        <button
+          onClick={() => setEditingProfile(true)}
+          className="text-left active:opacity-70 transition-opacity"
+          aria-label="Изменить профиль"
+        >
           <h1 className="text-xl font-bold flex items-center gap-1.5">
             Привет, {profile?.display_name ?? profile?.first_name}!
             {profile?.is_premium && <span title="Premium">⭐</span>}
+            <span className="text-sm text-muted">✏️</span>
           </h1>
           <p className="text-muted text-sm">Твой финансовый дашборд</p>
-        </div>
+        </button>
         <div className="flex items-center gap-2">
           <button
             onClick={toggle}
@@ -286,6 +293,8 @@ function DashboardContent() {
         {exporting ? "Отправляю…" : "📊 Выгрузить отчёт в Excel"}
       </button>
       {exportMessage && <p className="text-muted text-sm text-center">{exportMessage}</p>}
+
+      {editingProfile && <EditProfileModal onClose={() => setEditingProfile(false)} />}
     </main>
   );
 }
