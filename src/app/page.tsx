@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AuthGate } from "@/components/AuthGate";
 import { CatMascot, type CatMood } from "@/components/CatMascot";
 import { EditProfileModal } from "@/components/EditProfileModal";
-import { DailyFlowChart, type DailyFlowPoint } from "@/components/DailyFlowChart";
+import { DailyFlowChart, aggregateFlowPoints, type DailyFlowPoint, type Granularity } from "@/components/DailyFlowChart";
 import { useSession } from "@/lib/finance/session-context";
 import { usePrivacy, MASKED_AMOUNT } from "@/lib/finance/privacy-context";
 import { toLocalDateString } from "@/lib/finance/date-utils";
@@ -73,6 +73,7 @@ function DashboardContent() {
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [buyingPremium, setBuyingPremium] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [chartGranularity, setChartGranularity] = useState<Granularity>("day");
 
   async function handleExport() {
     setExporting(true);
@@ -178,6 +179,10 @@ function DashboardContent() {
     () => buildDailyFlow(transactions, startOfYear(new Date()), new Date()),
     [transactions],
   );
+  const chartPoints = useMemo(
+    () => aggregateFlowPoints(dailyFlow, chartGranularity),
+    [dailyFlow, chartGranularity],
+  );
 
   return (
     <main className="flex-1 flex flex-col px-4 py-6 gap-5 max-w-md mx-auto w-full">
@@ -256,7 +261,12 @@ function DashboardContent() {
         </div>
       </div>
 
-      <DailyFlowChart points={dailyFlow} hidden={hidden} />
+      <DailyFlowChart
+        points={chartPoints}
+        hidden={hidden}
+        granularity={chartGranularity}
+        onGranularityChange={setChartGranularity}
+      />
 
       <div className="rounded-2xl bg-card border border-card-border p-4">
         <p className="text-muted text-xs mb-1">Планируемые ежемесячные расходы</p>
