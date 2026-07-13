@@ -63,6 +63,77 @@ function amortizeLoanBalance(
   return { remainingBalance: balance, monthlyPayment, payoffMonth };
 }
 
+export type LoanSummary = {
+  monthlyPayment: number;
+  payoffMonth: number; // сколько месяцев реально потребуется с учётом допплатежей
+  totalPaid: number;
+  totalInterest: number; // переплата — то, что сверх суммы кредита
+};
+
+/**
+ * Полная сводка по кредиту: считает месяц за месяцем до полного погашения
+ * (в отличие от amortizeLoanBalance, которая ограничена monthsElapsed) —
+ * нужно для карточки "сколько всего отдашь" и сравнения "без/с досрочкой".
+ */
+export function summarizeLoan(
+  principal: number,
+  annualRatePct: number,
+  termMonths: number,
+  extraPaymentMonthly: number,
+): LoanSummary {
+  const monthlyRate = annualRatePct / 100 / 12;
+  const basePayment = calculateAnnuityPayment(principal, annualRatePct, termMonths);
+  const monthlyPayment = basePayment + extraPaymentMonthly;
+
+  let balance = principal;
+  let totalPaid = 0;
+  let month = 0;
+  // Защита от бесконечного цикла: если платёж не покрывает даже проценты
+  // первого месяца, кредит математически никогда не будет погашен.
+  const maxMonths = termMonths * 4 + 1200;
+
+  while (balance > 0 && month < maxMonths) {
+    month += 1;
+    const interest = balance * monthlyRate;
+    const payment = Math.min(monthlyPayment, balance + interest);
+    balance = balance + interest - payment;
+    totalPaid += payment;
+    if (balance < 0.01) balance = 0;
+  }
+
+  return {
+    monthlyPayment,
+    payoffMonth: month,
+    totalPaid,
+    totalInterest: totalPaid - principal,
+  };
+}
+
+/** Сумма ежемесячных платежей по всем кредитам, которые ещё не погашены на дату `now`. */
+export function activeLoanMonthlyPayment(loanEvents: Extract<FinancialPlanEvent, { event_type: "loan" }>[], now: Date = new Date()): number {
+  let total = 0;
+  for (const event of loanEvents) {
+    const effectiveFrom = new Date(event.effective_from);
+    const eventMonthStart = new Date(effectiveFrom.getFullYear(), effectiveFrom.getMonth(), 1);
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    if (currentMonthStart < eventMonthStart) continue;
+
+    const monthsSinceStart = monthsBetween(eventMonthStart, currentMonthStart) + 1;
+    const { principal, annual_rate_pct, term_months, extra_payment_monthly } = event.payload;
+    const { monthlyPayment, payoffMonth } = amortizeLoanBalance(
+      principal,
+      annual_rate_pct,
+      term_months,
+      extra_payment_monthly,
+      monthsSinceStart,
+    );
+    if (payoffMonth === null || monthsSinceStart <= payoffMonth) {
+      total += monthlyPayment;
+    }
+  }
+  return total;
+}
+
 function addMonths(date: Date, months: number): Date {
   const result = new Date(date.getFullYear(), date.getMonth() + months, 1);
   return result;

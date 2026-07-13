@@ -4,10 +4,14 @@ import { useEffect, useState } from "react";
 import { AuthGate } from "@/components/AuthGate";
 import { MoneyInput } from "@/components/MoneyInput";
 import { SegmentedSelect } from "@/components/SegmentedSelect";
+import { LoansTab } from "@/components/LoansTab";
 import { useSession } from "@/lib/finance/session-context";
 import { buildGoalProjection } from "@/lib/finance/projection";
 import { todayLocalDateString } from "@/lib/finance/date-utils";
-import type { Goal, RecurringExpense, Transaction } from "@/lib/finance/types";
+import type { FinancialPlanEvent, Goal, RecurringExpense } from "@/lib/finance/types";
+
+type LoanEvent = Extract<FinancialPlanEvent, { event_type: "loan" }>;
+type SectionKey = "plan" | "goals" | "loans";
 
 function formatMoney(amount: number) {
   return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(amount);
@@ -21,8 +25,10 @@ const MONTH_NAMES = [
 function GoalsPageContent() {
   const { supabase, profile } = useSession();
 
+  const [section, setSection] = useState<SectionKey>("plan");
   const [goals, setGoals] = useState<Goal[]>([]);
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
+  const [loans, setLoans] = useState<LoanEvent[]>([]);
   const [savingsByGoal, setSavingsByGoal] = useState<Record<string, number>>({});
   const [currentIncome, setCurrentIncome] = useState<number | null>(null);
 
@@ -53,11 +59,14 @@ function GoalsPageContent() {
     if (goalsData) setGoals(goalsData as Goal[]);
     if (recurringData) setRecurringExpenses(recurringData as RecurringExpense[]);
     if (eventsData) {
-      const incomeEvents = (eventsData as { event_type: string; payload: { new_monthly_income?: number } }[])
-        .filter((e) => e.event_type === "income_change");
+      const events = eventsData as FinancialPlanEvent[];
+      const incomeEvents = events.filter(
+        (e): e is Extract<FinancialPlanEvent, { event_type: "income_change" }> => e.event_type === "income_change",
+      );
       if (incomeEvents.length > 0) {
         setCurrentIncome(incomeEvents[incomeEvents.length - 1].payload.new_monthly_income ?? null);
       }
+      setLoans(events.filter((e): e is LoanEvent => e.event_type === "loan"));
     }
     if (savingTxs) {
       const totals: Record<string, number> = {};
@@ -150,6 +159,23 @@ function GoalsPageContent() {
     <main className="flex-1 flex flex-col px-4 py-6 gap-6 max-w-md mx-auto w-full">
       <h1 className="text-xl font-bold">Цели и план</h1>
 
+      <SegmentedSelect
+        options={[
+          { value: "plan" as const, label: "Доход и траты" },
+          { value: "goals" as const, label: "Цели" },
+          { value: "loans" as const, label: "Кредиты" },
+        ]}
+        value={section}
+        onChange={setSection}
+        columns={3}
+      />
+
+      {section === "loans" && profile && (
+        <LoansTab supabase={supabase} userId={profile.id} loans={loans} onChanged={loadAll} />
+      )}
+
+      {section === "plan" && (
+      <>
       <section className="rounded-2xl bg-card border border-card-border p-4 flex flex-col gap-3">
         <p className="font-semibold">Мой доход</p>
         <p className="text-2xl font-extrabold">
@@ -234,7 +260,11 @@ function GoalsPageContent() {
           </button>
         </form>
       </section>
+      </>
+      )}
 
+      {section === "goals" && (
+      <>
       <section className="rounded-2xl bg-card border border-card-border p-4 flex flex-col gap-3">
         <p className="font-semibold">Новая цель</p>
         <form onSubmit={handleAddGoal} className="flex flex-col gap-2">
@@ -333,6 +363,8 @@ function GoalsPageContent() {
           <p className="text-muted text-center py-6">Пока нет активных целей</p>
         )}
       </section>
+      </>
+      )}
     </main>
   );
 }

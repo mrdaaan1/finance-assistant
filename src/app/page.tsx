@@ -10,7 +10,10 @@ import { useSession } from "@/lib/finance/session-context";
 import { usePrivacy, MASKED_AMOUNT } from "@/lib/finance/privacy-context";
 import { toLocalDateString } from "@/lib/finance/date-utils";
 import { markLocalAchievementFlag } from "@/lib/finance/use-achievements-sync";
-import type { RecurringExpense, Transaction } from "@/lib/finance/types";
+import { activeLoanMonthlyPayment } from "@/lib/finance/projection";
+import type { FinancialPlanEvent, RecurringExpense, Transaction } from "@/lib/finance/types";
+
+type LoanEvent = Extract<FinancialPlanEvent, { event_type: "loan" }>;
 
 function formatMoney(amount: number) {
   return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(amount);
@@ -65,6 +68,7 @@ function DashboardContent() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [plannedIncome, setPlannedIncome] = useState(0);
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
+  const [loans, setLoans] = useState<LoanEvent[]>([]);
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [buyingPremium, setBuyingPremium] = useState(false);
@@ -112,16 +116,21 @@ function DashboardContent() {
           .order("occurred_on", { ascending: false }),
         supabase
           .from("financial_plan_events")
-          .select("event_type, payload, effective_from")
-          .eq("event_type", "income_change")
+          .select("id, user_id, event_type, payload, effective_from")
           .order("effective_from", { ascending: true }),
         supabase.from("recurring_expenses").select("*").eq("is_active", true),
       ]);
 
       if (txs) setTransactions(txs as unknown as Transaction[]);
       if (events && events.length > 0) {
-        const latest = events[events.length - 1] as { payload: { new_monthly_income: number } };
-        setPlannedIncome(latest.payload.new_monthly_income);
+        const allEvents = events as FinancialPlanEvent[];
+        const incomeEvents = allEvents.filter(
+          (e): e is Extract<FinancialPlanEvent, { event_type: "income_change" }> => e.event_type === "income_change",
+        );
+        if (incomeEvents.length > 0) {
+          setPlannedIncome(incomeEvents[incomeEvents.length - 1].payload.new_monthly_income);
+        }
+        setLoans(allEvents.filter((e): e is LoanEvent => e.event_type === "loan"));
       }
       if (recurring) setRecurringExpenses(recurring as RecurringExpense[]);
     }
@@ -158,7 +167,8 @@ function DashboardContent() {
     return { weekExpenses, monthExpenses, extraMonthIncome, topCategories };
   }, [transactions]);
 
-  const plannedExpenses = recurringExpenses.reduce((sum, r) => sum + r.amount, 0);
+  const loanMonthlyPayment = useMemo(() => activeLoanMonthlyPayment(loans), [loans]);
+  const plannedExpenses = recurringExpenses.reduce((sum, r) => sum + r.amount, 0) + loanMonthlyPayment;
   const totalMonthIncome = plannedIncome + stats.extraMonthIncome;
 
   const streak = profile?.current_streak ?? 0;
@@ -251,6 +261,11 @@ function DashboardContent() {
       <div className="rounded-2xl bg-card border border-card-border p-4">
         <p className="text-muted text-xs mb-1">Планируемые ежемесячные расходы</p>
         <p className="text-2xl font-extrabold">{hidden ? MASKED_AMOUNT : `${formatMoney(plannedExpenses)} ₽`}</p>
+        {loanMonthlyPayment > 0 && (
+          <p className="text-muted text-xs mt-1">
+            включая {hidden ? MASKED_AMOUNT : `${formatMoney(loanMonthlyPayment)} ₽`} по кредитам
+          </p>
+        )}
       </div>
 
       <div className="rounded-2xl bg-card border border-card-border p-4">
