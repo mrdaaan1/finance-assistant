@@ -40,6 +40,7 @@ export function LoansTab({
   const [termMonths, setTermMonths] = useState("");
   const [extraPayment, setExtraPayment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [explainerOpen, setExplainerOpen] = useState(false);
 
   async function handleAddLoan(e: React.FormEvent) {
     e.preventDefault();
@@ -77,10 +78,17 @@ export function LoansTab({
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="rounded-2xl bg-card border border-card-border p-4 flex flex-col gap-3">
-        <div>
-          <p className="font-semibold">Что такое кредит и досрочное погашение?</p>
-          <p className="text-muted text-sm mt-1 leading-snug">
+      <section className="rounded-2xl bg-card border border-card-border p-3">
+        <button
+          type="button"
+          onClick={() => setExplainerOpen((o) => !o)}
+          className="w-full flex items-center justify-between text-sm text-muted"
+        >
+          <span>Что такое кредит и досрочное погашение?</span>
+          <span className="text-xs">{explainerOpen ? "▲ свернуть" : "▼ узнать"}</span>
+        </button>
+        {explainerOpen && (
+          <p className="text-muted text-sm mt-2 leading-snug">
             Банк даёт тебе сумму (тело долга) сейчас, а ты возвращаешь её частями плюс проценты
             за пользование деньгами. Большинство кредитов и ипотек в России — аннуитетные:
             каждый месяц платёж одинаковый, но в начале срока в нём больше процентов, а в конце —
@@ -88,7 +96,7 @@ export function LoansTab({
             тело долга. Чем раньше вносишь допплатёж, тем меньше процентов набежит в будущем —
             это сокращает и переплату, и срок кредита.
           </p>
-        </div>
+        )}
       </section>
 
       <section className="rounded-2xl bg-card border border-card-border p-4 flex flex-col gap-3">
