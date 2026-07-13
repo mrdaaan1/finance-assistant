@@ -20,7 +20,7 @@ function formatMoney(amount: number) {
 const KIND_OPTIONS = [
   { value: "expense" as const, label: "Расход", icon: "💸" },
   { value: "income" as const, label: "Доход", icon: "💰" },
-  { value: "saving" as const, label: "Отложить", icon: "🎯" },
+  { value: "saving" as const, label: "Накопить", icon: "🎯" },
 ];
 
 function TransactionsPageContent() {
