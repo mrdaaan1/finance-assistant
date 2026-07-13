@@ -15,41 +15,32 @@ export async function POST() {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, game_balance")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
-
-  if (!profile) {
-    return NextResponse.json({ error: "profile_not_found" }, { status: 404 });
-  }
-
-  if (profile.game_balance < BET_AMOUNT) {
-    return NextResponse.json({ error: "insufficient_balance" }, { status: 400 });
-  }
-
   const reels = [0, 0, 0].map(() => SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)]);
   const isWin = reels[0] === reels[1] && reels[1] === reels[2];
-  const payout = isWin ? BET_AMOUNT * WIN_MULTIPLIER : 0;
-  const newBalance = profile.game_balance - BET_AMOUNT + payout;
 
-  const { error: updateError } = await supabase
-    .from("profiles")
-    .update({ game_balance: newBalance })
-    .eq("id", profile.id);
+  // RPC делает SELECT ... FOR UPDATE + запись спина одной транзакцией —
+  // защищает от гонки при параллельных/повторных запросах (см. миграцию
+  // 0008_slot_spin_atomic.sql).
+  const { data, error: rpcError } = await supabase
+    .rpc("slot_spin", {
+      p_bet_amount: BET_AMOUNT,
+      p_win_multiplier: WIN_MULTIPLIER,
+      p_reels: reels,
+      p_is_win: isWin,
+    })
+    .single();
 
-  if (updateError) {
+  if (rpcError) {
+    if (rpcError.message.includes("insufficient_balance")) {
+      return NextResponse.json({ error: "insufficient_balance" }, { status: 400 });
+    }
+    if (rpcError.message.includes("profile_not_found")) {
+      return NextResponse.json({ error: "profile_not_found" }, { status: 404 });
+    }
     return NextResponse.json({ error: "update_failed" }, { status: 500 });
   }
 
-  await supabase.from("slot_spins").insert({
-    user_id: profile.id,
-    bet_amount: BET_AMOUNT,
-    payout_amount: payout,
-    reels,
-    is_win: isWin,
-  });
+  const { new_balance: newBalance, payout } = data as { new_balance: number; payout: number };
 
   return NextResponse.json({ reels, isWin, payout, newBalance, betAmount: BET_AMOUNT });
 }

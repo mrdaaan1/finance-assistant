@@ -48,18 +48,36 @@ function GamesPageContent() {
 
     try {
       const res = await fetch("/api/slot-spin", { method: "POST" });
-      const data = await res.json();
 
-      if (!res.ok) {
-        setError(data.error === "insufficient_balance" ? "Недостаточно игровых денег" : "Что-то пошло не так");
+      // res.json() бросает исключение, если сервер вернул не-JSON (например,
+      // HTML-страницу таймаута при обрыве по Vercel maxDuration) — тогда мы
+      // не знаем, прошла ли ставка на сервере на самом деле, поэтому дальше
+      // не оставляем на экране случайный кадр анимации, а перечитываем
+      // реальный баланс из БД.
+      let data: { reels?: string[]; isWin?: boolean; payout?: number; error?: string };
+      try {
+        data = await res.json();
+      } catch {
+        setReels(["❓", "❓", "❓"]);
+        setError("Связь с сервером прервалась. Проверь баланс — если списание прошло, деньги уже на месте.");
+        await refreshProfile();
         return;
       }
 
-      setReels(data.reels);
-      setResult({ isWin: data.isWin, payout: data.payout });
+      if (!res.ok) {
+        setReels(["❓", "❓", "❓"]);
+        setError(data.error === "insufficient_balance" ? "Недостаточно игровых денег" : "Что-то пошло не так, попробуй ещё раз");
+        await refreshProfile();
+        return;
+      }
+
+      setReels(data.reels!);
+      setResult({ isWin: data.isWin!, payout: data.payout! });
       await refreshProfile();
     } catch {
-      setError("Не удалось связаться с сервером. Попробуй ещё раз.");
+      setReels(["❓", "❓", "❓"]);
+      setError("Не удалось связаться с сервером. Проверь баланс — если списание прошло, деньги уже на месте.");
+      await refreshProfile();
     } finally {
       window.clearInterval(shuffleInterval);
       setSpinning(false);
