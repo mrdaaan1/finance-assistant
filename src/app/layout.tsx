@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SessionProvider } from "@/lib/finance/session-context";
+import { PrivacyProvider } from "@/lib/finance/privacy-context";
 import { BottomNav } from "@/components/BottomNav";
 import "./globals.css";
 
@@ -34,8 +35,10 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <SessionProvider>
-          <div className="flex-1 flex flex-col">{children}</div>
-          <BottomNav />
+          <PrivacyProvider>
+            <div className="flex-1 flex flex-col">{children}</div>
+            <BottomNav />
+          </PrivacyProvider>
         </SessionProvider>
       </body>
     </html>

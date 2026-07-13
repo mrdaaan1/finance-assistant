@@ -52,7 +52,7 @@ export async function POST() {
   const KIND_LABELS: Record<Row["kind"], string> = {
     expense: "Расход",
     income: "Доход",
-    saving: "Отложение",
+    saving: "Накопление",
   };
 
   for (const tx of (transactions ?? []) as Row[]) {

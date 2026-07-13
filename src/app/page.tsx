@@ -6,7 +6,9 @@ import { AuthGate } from "@/components/AuthGate";
 import { CatMascot, type CatMood } from "@/components/CatMascot";
 import { DailyFlowChart, type DailyFlowPoint } from "@/components/DailyFlowChart";
 import { useSession } from "@/lib/finance/session-context";
+import { usePrivacy, MASKED_AMOUNT } from "@/lib/finance/privacy-context";
 import { toLocalDateString } from "@/lib/finance/date-utils";
+import { markLocalAchievementFlag } from "@/lib/finance/use-achievements-sync";
 import type { RecurringExpense, Transaction } from "@/lib/finance/types";
 
 function formatMoney(amount: number) {
@@ -58,6 +60,7 @@ function catMoodForStreak(streak: number): CatMood {
 
 function DashboardContent() {
   const { supabase, profile, refreshProfile, waitForPremium } = useSession();
+  const { hidden, toggle } = usePrivacy();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [plannedIncome, setPlannedIncome] = useState(0);
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
@@ -70,6 +73,7 @@ function DashboardContent() {
     setExportMessage(null);
     const res = await fetch("/api/export", { method: "POST" });
     setExporting(false);
+    if (res.ok) markLocalAchievementFlag("exported_report");
     setExportMessage(res.ok ? "Отчёт отправлен тебе в чат с ботом 📩" : "Не удалось отправить отчёт");
   }
 
@@ -173,7 +177,17 @@ function DashboardContent() {
           </h1>
           <p className="text-muted text-sm">Твой финансовый дашборд</p>
         </div>
-        <CatMascot mood={catMoodForStreak(streak)} size={64} interactive />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggle}
+            aria-label={hidden ? "Показать суммы" : "Скрыть суммы"}
+            title={hidden ? "Показать суммы" : "Скрыть суммы"}
+            className="w-9 h-9 rounded-full bg-card border border-card-border flex items-center justify-center text-base text-muted"
+          >
+            {hidden ? "🙈" : "👁️"}
+          </button>
+          <CatMascot mood={catMoodForStreak(streak)} size={64} interactive />
+        </div>
       </div>
 
       <Link
@@ -197,36 +211,44 @@ function DashboardContent() {
         </button>
       )}
 
-      <div className="rounded-2xl bg-gradient-to-br from-accent to-accent-dark text-white p-5 shadow-sm flex items-center justify-between">
+      <Link
+        href="/achievements"
+        className="rounded-2xl bg-gradient-to-br from-accent to-accent-dark text-white p-5 shadow-sm flex items-center justify-between"
+      >
         <div>
           <p className="text-white/80 text-xs uppercase tracking-wide">Серия дней подряд</p>
           <p className="text-3xl font-extrabold">{streak} 🔥</p>
           <p className="text-white/70 text-xs mt-1">Рекорд: {longestStreak} дней</p>
         </div>
-        <p className="text-white/80 text-xs max-w-[40%] text-right">Не пропусти день!</p>
-      </div>
+        <div className="text-right">
+          <p className="text-white/80 text-xs">🏆 Ачивки</p>
+          <p className="font-bold">{profile?.boosts_balance ?? 0} ⚡</p>
+        </div>
+      </Link>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl bg-card border border-card-border p-4">
           <p className="text-muted text-xs">Доход за месяц</p>
-          <p className="text-lg font-bold text-emerald-500">+{formatMoney(totalMonthIncome)} ₽</p>
+          <p className="text-lg font-bold text-emerald-500">
+            {hidden ? MASKED_AMOUNT : `+${formatMoney(totalMonthIncome)} ₽`}
+          </p>
         </div>
         <div className="rounded-2xl bg-card border border-card-border p-4">
           <p className="text-muted text-xs">Расход за месяц</p>
-          <p className="text-lg font-bold">−{formatMoney(stats.monthExpenses)} ₽</p>
+          <p className="text-lg font-bold">{hidden ? MASKED_AMOUNT : `−${formatMoney(stats.monthExpenses)} ₽`}</p>
         </div>
       </div>
 
-      <DailyFlowChart points={dailyFlow} />
+      <DailyFlowChart points={dailyFlow} hidden={hidden} />
 
       <div className="rounded-2xl bg-card border border-card-border p-4">
         <p className="text-muted text-xs mb-1">Планируемые ежемесячные расходы</p>
-        <p className="text-2xl font-extrabold">{formatMoney(plannedExpenses)} ₽</p>
+        <p className="text-2xl font-extrabold">{hidden ? MASKED_AMOUNT : `${formatMoney(plannedExpenses)} ₽`}</p>
       </div>
 
       <div className="rounded-2xl bg-card border border-card-border p-4">
-        <p className="text-muted text-xs mb-1">Траты за эту неделю</p>
-        <p className="text-2xl font-extrabold">{formatMoney(stats.weekExpenses)} ₽</p>
+        <p className="text-muted text-xs mb-1">Операции за эту неделю</p>
+        <p className="text-2xl font-extrabold">{hidden ? MASKED_AMOUNT : `${formatMoney(stats.weekExpenses)} ₽`}</p>
       </div>
 
       <div className="rounded-2xl bg-card border border-card-border p-4">
@@ -242,12 +264,12 @@ function DashboardContent() {
               <div key={name}>
                 <div className="flex justify-between text-sm mb-1">
                   <span>{name}</span>
-                  <span className="font-medium">{formatMoney(amount)} ₽</span>
+                  <span className="font-medium">{hidden ? MASKED_AMOUNT : `${formatMoney(amount)} ₽`}</span>
                 </div>
                 <div className="h-2 rounded-full bg-background overflow-hidden">
                   <div
                     className="h-full rounded-full bg-accent"
-                    style={{ width: `${width}%` }}
+                    style={{ width: hidden ? "100%" : `${width}%` }}
                   />
                 </div>
               </div>

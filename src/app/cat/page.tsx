@@ -6,6 +6,7 @@ import { AuthGate } from "@/components/AuthGate";
 import { CatMascot, type CatState } from "@/components/CatMascot";
 import { useSession } from "@/lib/finance/session-context";
 import { WavRecorder } from "@/lib/voice/wav-recorder";
+import { markLocalAchievementFlag } from "@/lib/finance/use-achievements-sync";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -135,6 +136,7 @@ function CatChatContent() {
         if (!res.ok) throw new Error("chat_failed");
         const { reply } = (await res.json()) as { reply: string };
 
+        markLocalAchievementFlag("talked_to_cat");
         setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
         if (voiceOn) {
           await speak(reply);

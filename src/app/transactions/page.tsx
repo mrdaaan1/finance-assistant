@@ -105,7 +105,7 @@ function TransactionsPageContent() {
 
   return (
     <main className="flex-1 flex flex-col px-4 py-6 gap-6 max-w-md mx-auto w-full">
-      <h1 className="text-xl font-bold">Траты и доходы</h1>
+      <h1 className="text-xl font-bold">Операции</h1>
 
       <form
         onSubmit={handleSubmit}
@@ -188,7 +188,7 @@ function TransactionsPageContent() {
           >
             <div className="flex flex-col">
               <span className="font-medium">
-                {tx.kind === "saving" ? "Отложение" : tx.category?.name ?? "Без категории"}
+                {tx.kind === "saving" ? "Накопление" : tx.category?.name ?? "Без категории"}
               </span>
               <span className="text-xs text-muted">
                 {new Date(tx.occurred_on).toLocaleDateString("ru-RU")}

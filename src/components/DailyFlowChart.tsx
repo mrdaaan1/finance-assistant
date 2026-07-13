@@ -12,7 +12,7 @@ export type DailyFlowPoint = {
 const SERIES = [
   { key: "income" as const, label: "Доход", light: "#1baf7a", dark: "#199e70" },
   { key: "expense" as const, label: "Расход", light: "#eb6834", dark: "#d95926" },
-  { key: "saving" as const, label: "Отложено", light: "#6d5bf3", dark: "#8b7bf7" },
+  { key: "saving" as const, label: "Накопления", light: "#6d5bf3", dark: "#8b7bf7" },
 ];
 
 const DAY_WIDTH = 46;
@@ -29,7 +29,7 @@ function formatDayLabel(dateStr: string) {
   return d.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
 }
 
-export function DailyFlowChart({ points }: { points: DailyFlowPoint[] }) {
+export function DailyFlowChart({ points, hidden = false }: { points: DailyFlowPoint[]; hidden?: boolean }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -195,7 +195,9 @@ export function DailyFlowChart({ points }: { points: DailyFlowPoint[] }) {
               {SERIES.map((s) => (
                 <div key={s.key} className="flex justify-between gap-3">
                   <span className="opacity-80">{s.label}</span>
-                  <span className="font-medium">{formatMoney(points[hoverIndex][s.key])} ₽</span>
+                  <span className="font-medium">
+                    {hidden ? "••••" : `${formatMoney(points[hoverIndex][s.key])} ₽`}
+                  </span>
                 </div>
               ))}
             </div>

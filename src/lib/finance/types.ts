@@ -38,6 +38,7 @@ export type Profile = {
   onboarded: boolean;
   is_premium: boolean;
   game_balance: number;
+  boosts_balance: number;
   current_streak: number;
   longest_streak: number;
   last_active_date: string | null;
