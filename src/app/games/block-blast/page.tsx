@@ -18,6 +18,9 @@ import {
 
 const CELL_SIZE = 34;
 const CELL_GAP = 4;
+// Фигура визуально приподнята над пальцем/курсором на это расстояние по Y —
+// иначе на телефоне палец полностью закрывает то, что переносишь.
+const LIFT_Y = CELL_SIZE * 1.6;
 
 type DragState = {
   shapeIndex: number;
@@ -30,22 +33,45 @@ function formatScore(n: number) {
   return new Intl.NumberFormat("ru-RU").format(Math.round(n));
 }
 
+/**
+ * Единая точка правды для положения переносимой фигуры: и рендер (где
+ * рисуем полупрозрачную фигуру и "призрак" на доске), и определение
+ * ячейки-цели при отпускании обязаны использовать один и тот же расчёт
+ * верхнего левого угла — иначе визуальная позиция и фактическое место
+ * попадания расходятся (баг "ставится на клетку правее" на широких фигурах:
+ * раньше X брался без поправки на центрирование фигуры, а Y — с поправкой).
+ */
+function dragTopLeft(x: number, y: number, shape: ShapeDef): { left: number; top: number } {
+  const cols = shape.cells[0].length;
+  const rows = shape.cells.length;
+  return {
+    left: x - (cols * CELL_SIZE) / 2,
+    top: y - LIFT_Y - (rows * CELL_SIZE) / 2,
+  };
+}
+
 function BlockBlastContent() {
   const { profile, refreshProfile } = useSession();
   const [grid, setGrid] = useState<Grid>(() => createEmptyGrid());
   const [tray, setTray] = useState<ShapeDef[]>(() => generateTray());
   const [score, setScore] = useState(0);
   const [drag, setDrag] = useState<DragState | null>(null);
+  const [savingScore, setSavingScore] = useState(false);
+  const [newRecord, setNewRecord] = useState(false);
 
   // "Игра окончена" — чистая производная от текущих grid/tray, а не
   // независимое состояние: не нужен эффект, синхронизирующий одно с другим.
   const gameOver = tray.length > 0 && isGameOver(grid, tray);
-  const [savingScore, setSavingScore] = useState(false);
-  const [newRecord, setNewRecord] = useState(false);
 
   const boardRef = useRef<HTMLDivElement>(null);
   const boardRect = useRef<DOMRect | null>(null);
   const submittedRef = useRef(false);
+  // handlePointerMove/Up регистрируются на window нативно (см. ниже) — им
+  // нужен доступ к актуальным grid/tray без пересоздания слушателей на
+  // каждый рендер, поэтому дублируем значения в рефы.
+  const gridRef = useRef(grid);
+  const trayRef = useRef(tray);
+  const dragRef = useRef(drag);
 
   const bestScore = profile?.block_blast_best_score ?? 0;
 
@@ -86,59 +112,98 @@ function BlockBlastContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameOver]);
 
-  function cellFromPoint(clientX: number, clientY: number): { row: number; col: number } | null {
+  function cellFromTopLeft(left: number, top: number): { row: number; col: number } | null {
     const rect = boardRect.current;
     if (!rect) return null;
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-    const col = Math.floor(x / (CELL_SIZE + CELL_GAP));
-    const row = Math.floor(y / (CELL_SIZE + CELL_GAP));
+    const x = left - rect.left;
+    const y = top - rect.top;
+    const col = Math.round(x / (CELL_SIZE + CELL_GAP));
+    const row = Math.round(y / (CELL_SIZE + CELL_GAP));
     if (row < 0 || row >= GRID_SIZE || col < 0 || col >= GRID_SIZE) return null;
     return { row, col };
   }
 
+  const finishDrag = useCallback((clientX: number, clientY: number, shapeIndex: number) => {
+    const shape = trayRef.current[shapeIndex];
+    if (!shape) return;
+
+    const { left, top } = dragTopLeft(clientX, clientY, shape);
+    const cell = cellFromTopLeft(left, top);
+
+    if (cell && canPlaceShapeAt(gridRef.current, shape.cells, cell.row, cell.col)) {
+      const { grid: nextGrid, clearedLines, cellsPlaced } = placeShape(
+        gridRef.current,
+        shape.cells,
+        cell.row,
+        cell.col,
+      );
+      setGrid(nextGrid);
+      setScore((s) => s + scoreForMove(cellsPlaced, clearedLines));
+      setTray((prevTray) => {
+        const rest = prevTray.filter((_, i) => i !== shapeIndex);
+        return rest.length === 0 ? generateTray() : rest;
+      });
+    }
+  }, []);
+
+  // Слушатели переноса вешаем на window нативно с {passive: false}, а не
+  // через React onPointerMove/onPointerUp — тот же паттерн, что уже чинил
+  // скролл графика на дашборде (см. DailyFlowChart): React вешает touch-
+  // обработчики как passive, из-за чего Telegram WebView (и мобильный Safari)
+  // сам решает, что палец на экране — это скролл страницы, может дёрнуть
+  // viewport и не всегда доносит финальный pointerup до React. preventDefault
+  // здесь глушит нативный скролл/зум на время переноса фигуры.
+  useEffect(() => {
+    if (!drag) return;
+
+    function handleMove(e: PointerEvent) {
+      if (e.pointerId !== dragRef.current?.pointerId) return;
+      e.preventDefault();
+      setDrag((prev) => (prev && prev.pointerId === e.pointerId ? { ...prev, x: e.clientX, y: e.clientY } : prev));
+    }
+
+    function handleUp(e: PointerEvent) {
+      const current = dragRef.current;
+      if (!current || e.pointerId !== current.pointerId) return;
+      e.preventDefault();
+      finishDrag(e.clientX, e.clientY, current.shapeIndex);
+      setDrag(null);
+    }
+
+    window.addEventListener("pointermove", handleMove, { passive: false });
+    window.addEventListener("pointerup", handleUp, { passive: false });
+    window.addEventListener("pointercancel", handleUp, { passive: false });
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
+  }, [drag, finishDrag]);
+
+  useEffect(() => {
+    gridRef.current = grid;
+  }, [grid]);
+  useEffect(() => {
+    trayRef.current = tray;
+  }, [tray]);
+  useEffect(() => {
+    dragRef.current = drag;
+  }, [drag]);
+
   function handlePointerDown(e: React.PointerEvent, shapeIndex: number) {
     if (gameOver) return;
-    const target = e.currentTarget as HTMLElement;
-    target.setPointerCapture(e.pointerId);
+    e.preventDefault();
     // Кэшируем прямоугольник доски один раз на весь перенос — дешевле, чем
     // читать getBoundingClientRect на каждый pointermove.
     boardRect.current = boardRef.current?.getBoundingClientRect() ?? null;
     setDrag({ shapeIndex, pointerId: e.pointerId, x: e.clientX, y: e.clientY });
   }
 
-  function handlePointerMove(e: React.PointerEvent) {
-    setDrag((prev) => (prev && prev.pointerId === e.pointerId ? { ...prev, x: e.clientX, y: e.clientY } : prev));
-  }
-
-  function handlePointerUp(e: React.PointerEvent) {
-    if (!drag || drag.pointerId !== e.pointerId) return;
-
-    // Точка выше центра пальца/курсора — фигура визуально приподнята над
-    // пальцем при переносе, целимся туда же, куда её показываем (см. рендер ниже).
-    const targetY = e.clientY - CELL_SIZE * 1.6;
-    const cell = cellFromPoint(e.clientX, targetY);
-    const shape = tray[drag.shapeIndex];
-
-    // handlePointerUp — обработчик события, пересоздаётся при каждом рендере
-    // и замыкает актуальные grid/tray из последнего рендера, так что читать
-    // их напрямую здесь безопасно — вложенные функциональные setState друг
-    // в друге не нужны и только усложняют код.
-    if (cell && shape && canPlaceShapeAt(grid, shape.cells, cell.row, cell.col)) {
-      const { grid: nextGrid, clearedLines, cellsPlaced } = placeShape(grid, shape.cells, cell.row, cell.col);
-      setGrid(nextGrid);
-      setScore((s) => s + scoreForMove(cellsPlaced, clearedLines));
-      setTray((prevTray) => {
-        const rest = prevTray.filter((_, i) => i !== drag.shapeIndex);
-        return rest.length === 0 ? generateTray() : rest;
-      });
-    }
-
-    setDrag(null);
-  }
-
   return (
-    <main className="flex-1 flex flex-col px-4 py-6 gap-4 max-w-md mx-auto w-full select-none">
+    <main
+      className="flex-1 flex flex-col px-4 py-6 gap-4 max-w-md mx-auto w-full select-none"
+      style={drag ? { touchAction: "none", overscrollBehavior: "none" } : undefined}
+    >
       <div className="flex items-center gap-3">
         <Link
           href="/games"
@@ -171,7 +236,7 @@ function BlockBlastContent() {
         drag={drag}
         gameOver={gameOver}
         onPointerDownShape={handlePointerDown}
-        cellFromPoint={cellFromPoint}
+        cellFromTopLeft={cellFromTopLeft}
       />
 
       <p className="text-muted text-xs text-center">
@@ -196,15 +261,6 @@ function BlockBlastContent() {
           </div>
         </div>
       )}
-
-      {/* Отлавливаем pointerup/move даже если курсор ушёл с фигуры лотка */}
-      <div
-        className="fixed inset-0 z-40"
-        style={{ pointerEvents: drag ? "auto" : "none" }}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-      />
     </main>
   );
 }
@@ -216,7 +272,7 @@ function BlockBlastBoard({
   drag,
   gameOver,
   onPointerDownShape,
-  cellFromPoint,
+  cellFromTopLeft,
 }: {
   boardRef: React.RefObject<HTMLDivElement | null>;
   grid: Grid;
@@ -224,10 +280,11 @@ function BlockBlastBoard({
   drag: DragState | null;
   gameOver: boolean;
   onPointerDownShape: (e: React.PointerEvent, shapeIndex: number) => void;
-  cellFromPoint: (x: number, y: number) => { row: number; col: number } | null;
+  cellFromTopLeft: (left: number, top: number) => { row: number; col: number } | null;
 }) {
   const draggedShape = drag ? tray[drag.shapeIndex] : null;
-  const ghostCell = drag && draggedShape ? cellFromPoint(drag.x, drag.y - CELL_SIZE * 1.6) : null;
+  const dragPos = drag && draggedShape ? dragTopLeft(drag.x, drag.y, draggedShape) : null;
+  const ghostCell = dragPos ? cellFromTopLeft(dragPos.left, dragPos.top) : null;
   const ghostValid =
     ghostCell && draggedShape ? canPlaceShapeAt(grid, draggedShape.cells, ghostCell.row, ghostCell.col) : false;
 
@@ -239,6 +296,7 @@ function BlockBlastBoard({
         style={{
           width: GRID_SIZE * (CELL_SIZE + CELL_GAP) + CELL_GAP,
           height: GRID_SIZE * (CELL_SIZE + CELL_GAP) + CELL_GAP,
+          touchAction: "none",
         }}
       >
         {grid.map((rowArr, r) =>
@@ -276,7 +334,7 @@ function BlockBlastBoard({
         )}
       </div>
 
-      <div className="flex gap-4 items-start justify-center min-h-[90px] w-full">
+      <div className="flex gap-4 items-start justify-center min-h-[90px] w-full" style={{ touchAction: "none" }}>
         {tray.map((shape, i) => {
           const isDragging = drag?.shapeIndex === i;
           const rows = shape.cells.length;
@@ -311,13 +369,10 @@ function BlockBlastBoard({
       </div>
 
       {/* Фигура, следующая за пальцем/курсором во время переноса */}
-      {drag && draggedShape && (
+      {drag && draggedShape && dragPos && (
         <div
           className="fixed pointer-events-none z-50"
-          style={{
-            left: drag.x - (draggedShape.cells[0].length * CELL_SIZE) / 2,
-            top: drag.y - CELL_SIZE * 1.6 - (draggedShape.cells.length * CELL_SIZE) / 2,
-          }}
+          style={{ left: dragPos.left, top: dragPos.top }}
         >
           {draggedShape.cells.map((rowArr, r) =>
             rowArr.map(
