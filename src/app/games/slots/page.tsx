@@ -31,9 +31,19 @@ function GamesPageContent() {
     setResult(null);
     setError(null);
 
-    // Быстро "перетасовываем" символы для эффекта вращения, пока ждём ответ сервера
+    // Промежуточные кадры анимации подбираются так, чтобы все три символа
+    // никогда случайно не совпали — иначе игрок видит на экране "джекпот",
+    // которого сервер не подтверждал, и решает, что приложение его обсчитало
+    // (так и произошло с Романом Ивановым: 3 вишни мелькнули во время
+    // вращения, а настоящий, более поздний ответ сервера был проигрышным).
     const shuffleInterval = window.setInterval(() => {
-      setReels([randomSymbol(), randomSymbol(), randomSymbol()]);
+      const first = randomSymbol();
+      const second = randomSymbol();
+      let third = randomSymbol();
+      while (first === second && second === third) {
+        third = randomSymbol();
+      }
+      setReels([first, second, third]);
     }, 80);
 
     try {
