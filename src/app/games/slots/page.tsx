@@ -58,6 +58,7 @@ function GamesPageContent() {
       try {
         data = await res.json();
       } catch {
+        window.clearInterval(shuffleInterval);
         setReels(["❓", "❓", "❓"]);
         setError("Связь с сервером прервалась. Проверь баланс — если списание прошло, деньги уже на месте.");
         await refreshProfile();
@@ -65,21 +66,31 @@ function GamesPageContent() {
       }
 
       if (!res.ok) {
+        window.clearInterval(shuffleInterval);
         setReels(["❓", "❓", "❓"]);
         setError(data.error === "insufficient_balance" ? "Недостаточно игровых денег" : "Что-то пошло не так, попробуй ещё раз");
         await refreshProfile();
         return;
       }
 
+      // Таймер обязательно глушим ДО того, как выставляем финальные reels и
+      // result: иначе между этим setReels и вызовом clearInterval в finally
+      // может проскочить ещё один тик shuffle-интервала (React батчит
+      // обновление состояния асинхронно, а setInterval — независимый таймер)
+      // и перезаписать честный результат случайной картинкой — барабаны
+      // замирают не на том, что реально выпало, при этом текст "Джекпот"
+      // уже показывает правильные данные. Ровно так и получилось: в БД
+      // всё честно (3 колокольчика), а на экране застыл случайный набор.
+      window.clearInterval(shuffleInterval);
       setReels(data.reels!);
       setResult({ isWin: data.isWin!, payout: data.payout! });
       await refreshProfile();
     } catch {
+      window.clearInterval(shuffleInterval);
       setReels(["❓", "❓", "❓"]);
       setError("Не удалось связаться с сервером. Проверь баланс — если списание прошло, деньги уже на месте.");
       await refreshProfile();
     } finally {
-      window.clearInterval(shuffleInterval);
       setSpinning(false);
     }
   }
