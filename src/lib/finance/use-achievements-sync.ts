@@ -79,6 +79,7 @@ export function useAchievementsSync(supabase: SupabaseClient, profile: Profile |
       assetsCount: assetsCount ?? 0,
       recurringCount: recurringCount ?? 0,
       hasSlotSpin: (slotSpinsCount ?? 0) > 0,
+      blockBlastBestScore: profile.block_blast_best_score,
       hasChessGame: (chessGamesCount ?? 0) > 0,
       hasChessWin: (chessWinsCount ?? 0) > 0,
       hasTalkedToCat: localFlags.has("talked_to_cat"),

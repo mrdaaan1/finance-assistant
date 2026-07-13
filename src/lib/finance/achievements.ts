@@ -30,6 +30,8 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { key: "first_asset", title: "Первый актив", description: "Добавь свой первый актив", icon: "🏦", boosts: 15, category: "action" },
   { key: "first_recurring", title: "Планировщик", description: "Добавь регулярную ежемесячную трату", icon: "📅", boosts: 15, category: "action" },
   { key: "played_slots", title: "Азартный кот", description: "Сделай ставку в игровом автомате", icon: "🎰", boosts: 10, category: "action" },
+  { key: "played_block_blast", title: "Пазломан", description: "Сыграй партию в блок-пазл", icon: "🧩", boosts: 10, category: "action" },
+  { key: "block_blast_100", title: "Собери линию", description: "Набери 100 очков в блок-пазле", icon: "🧩", boosts: 30, category: "milestone" },
   { key: "played_chess", title: "Гроссмейстер", description: "Сыграй партию в шахматы", icon: "♟️", boosts: 15, category: "action" },
   { key: "chess_win", title: "Шах и мат", description: "Выиграй партию в шахматы", icon: "👑", boosts: 30, category: "action" },
   { key: "talked_to_cat", title: "Знакомство", description: "Поговори с Фиником в первый раз", icon: "🐾", boosts: 15, category: "action" },
@@ -56,6 +58,7 @@ export type AchievementInputs = {
   assetsCount: number;
   recurringCount: number;
   hasSlotSpin: boolean;
+  blockBlastBestScore: number;
   hasChessGame: boolean;
   hasChessWin: boolean;
   hasTalkedToCat: boolean;
@@ -81,6 +84,8 @@ export function computeUnlockedKeys(inputs: AchievementInputs): Set<string> {
   if (inputs.assetsCount >= 1) unlocked.add("first_asset");
   if (inputs.recurringCount >= 1) unlocked.add("first_recurring");
   if (inputs.hasSlotSpin) unlocked.add("played_slots");
+  if (inputs.blockBlastBestScore > 0) unlocked.add("played_block_blast");
+  if (inputs.blockBlastBestScore >= 100) unlocked.add("block_blast_100");
   if (inputs.hasChessGame) unlocked.add("played_chess");
   if (inputs.hasChessWin) unlocked.add("chess_win");
   if (inputs.hasTalkedToCat) unlocked.add("talked_to_cat");

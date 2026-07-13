@@ -36,6 +36,17 @@ function GamesHubContent() {
         </div>
         <span className="text-2xl">→</span>
       </Link>
+
+      <Link
+        href="/games/block-blast"
+        className="rounded-2xl bg-card border border-card-border p-5 flex items-center justify-between"
+      >
+        <div>
+          <p className="font-semibold text-lg">🧩 Блок-пазл</p>
+          <p className="text-muted text-sm">Заполняй строки и столбцы, набирай рекорд</p>
+        </div>
+        <p className="font-bold text-accent">{profile?.block_blast_best_score ?? 0}</p>
+      </Link>
     </main>
   );
 }

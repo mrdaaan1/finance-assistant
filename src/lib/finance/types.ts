@@ -39,6 +39,7 @@ export type Profile = {
   is_premium: boolean;
   game_balance: number;
   boosts_balance: number;
+  block_blast_best_score: number;
   current_streak: number;
   longest_streak: number;
   last_active_date: string | null;
