@@ -171,7 +171,7 @@ function FiveLettersContent() {
   const showDone = finished || alreadyPlayedToday;
 
   return (
-    <main className="flex-1 flex flex-col px-4 py-6 gap-4 max-w-md mx-auto w-full">
+    <main className="flex-1 flex flex-col px-4 py-6 gap-4 max-w-md mx-auto w-full overflow-x-hidden">
       <div className="flex items-center justify-between">
         <Link href="/games" className="text-muted text-sm">
           ← Игры
@@ -222,30 +222,30 @@ function FiveLettersContent() {
       )}
 
       {!showDone && (
-        <div className="flex flex-col gap-1.5 mt-auto">
+        <div className="flex flex-col gap-1.5 mt-auto w-full">
           {RU_KEYBOARD_ROWS.map((row, ri) => (
-            <div key={ri} className="flex justify-center gap-1">
+            <div key={ri} className="flex gap-1 w-full">
               {row.map((letter) => (
                 <button
                   key={letter}
                   onClick={() => handleKey(letter)}
-                  className="min-w-8 h-11 px-1 rounded-md bg-card border border-card-border text-sm font-semibold uppercase"
+                  className="flex-1 min-w-0 h-11 rounded-md bg-card border border-card-border text-sm font-semibold uppercase"
                 >
                   {letter}
                 </button>
               ))}
             </div>
           ))}
-          <div className="flex justify-center gap-1">
+          <div className="flex gap-1 w-full">
             <button
               onClick={() => handleKey("backspace")}
-              className="h-11 px-4 rounded-md bg-card border border-card-border text-sm font-semibold"
+              className="flex-1 min-w-0 h-11 rounded-md bg-card border border-card-border text-sm font-semibold"
             >
               ⌫
             </button>
             <button
               onClick={() => handleKey("enter")}
-              className="h-11 px-4 rounded-md bg-accent text-white text-sm font-semibold"
+              className="flex-1 min-w-0 h-11 rounded-md bg-accent text-white text-sm font-semibold"
             >
               Ввод
             </button>
