@@ -40,6 +40,10 @@ export type Profile = {
   game_balance: number;
   boosts_balance: number;
   block_blast_best_score: number;
+  five_letters_current_streak: number;
+  five_letters_best_streak: number;
+  five_letters_wins: number;
+  five_letters_last_play_date: string | null;
   current_streak: number;
   longest_streak: number;
   last_active_date: string | null;

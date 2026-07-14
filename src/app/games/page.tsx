@@ -47,6 +47,17 @@ function GamesHubContent() {
         </div>
         <p className="font-bold text-accent">{profile?.block_blast_best_score ?? 0}</p>
       </Link>
+
+      <Link
+        href="/games/five-letters"
+        className="rounded-2xl bg-card border border-card-border p-5 flex items-center justify-between"
+      >
+        <div>
+          <p className="font-semibold text-lg">🔤 5 букв</p>
+          <p className="text-muted text-sm">Угадай слово дня за 6 попыток</p>
+        </div>
+        <p className="font-bold text-accent">🔥 {profile?.five_letters_current_streak ?? 0}</p>
+      </Link>
     </main>
   );
 }

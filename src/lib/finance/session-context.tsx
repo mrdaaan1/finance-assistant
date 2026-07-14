@@ -31,7 +31,7 @@ type SessionContextValue = {
 const SessionContext = createContext<SessionContextValue | null>(null);
 
 const PROFILE_COLUMNS =
-  "id, telegram_id, username, first_name, last_name, avatar_url, display_name, avatar_key, onboarded, is_premium, game_balance, boosts_balance, block_blast_best_score, current_streak, longest_streak, last_active_date, created_at";
+  "id, telegram_id, username, first_name, last_name, avatar_url, display_name, avatar_key, onboarded, is_premium, game_balance, boosts_balance, block_blast_best_score, five_letters_current_streak, five_letters_best_streak, five_letters_wins, five_letters_last_play_date, current_streak, longest_streak, last_active_date, created_at";
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [supabase] = useState(() => createClient());
