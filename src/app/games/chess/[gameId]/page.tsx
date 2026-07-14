@@ -12,8 +12,9 @@ type ChessGameRow = {
   white_player_id: string;
   black_player_id: string;
   fen: string;
-  status: "active" | "finished";
+  status: "active" | "finished" | "abandoned";
   winner_id: string | null;
+  ended_by_id: string | null;
 };
 
 function ChessGameContent() {
@@ -23,10 +24,13 @@ function ChessGameContent() {
 
   const [game, setGame] = useState<ChessGameRow | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [resigning, setResigning] = useState(false);
 
   const chess = useMemo(() => new Chess(game?.fen), [game?.fen]);
   const gameRef = useRef(game);
-  gameRef.current = game;
+  useEffect(() => {
+    gameRef.current = game;
+  }, [game]);
 
   useEffect(() => {
     let active = true;
@@ -34,7 +38,7 @@ function ChessGameContent() {
     async function load() {
       const { data } = await supabase
         .from("chess_games")
-        .select("id, white_player_id, black_player_id, fen, status, winner_id")
+        .select("id, white_player_id, black_player_id, fen, status, winner_id, ended_by_id")
         .eq("id", params.gameId)
         .maybeSingle();
 
@@ -119,20 +123,40 @@ function ChessGameContent() {
     router.push("/games/chess");
   }
 
+  async function handleResign() {
+    if (!gameRef.current || resigning) return;
+    setResigning(true);
+    const res = await fetch("/api/chess-resign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gameId: gameRef.current.id }),
+    });
+    setResigning(false);
+    if (!res.ok) {
+      setError("Не удалось выйти из партии, попробуй ещё раз");
+      return;
+    }
+    router.push("/games/chess");
+  }
+
   return (
     <main className="flex-1 flex flex-col px-4 py-6 gap-4 max-w-md mx-auto w-full items-center">
       <h1 className="text-xl font-bold">♟️ Партия</h1>
 
       <p className="text-muted text-sm">
-        {game.status === "finished"
+        {game.status === "abandoned"
           ? game.winner_id === profile.id
-            ? "Ты выиграл! 🎉"
-            : game.winner_id
-              ? "Соперник победил"
-              : "Ничья"
-          : myTurn
-            ? "Твой ход"
-            : "Ход соперника…"}
+            ? "Соперник вышел из партии — победа! 🎉"
+            : "Ты вышел из партии"
+          : game.status === "finished"
+            ? game.winner_id === profile.id
+              ? "Ты выиграл! 🎉"
+              : game.winner_id
+                ? "Соперник победил"
+                : "Ничья"
+            : myTurn
+              ? "Твой ход"
+              : "Ход соперника…"}
       </p>
 
       <div className="w-full max-w-sm">
@@ -148,7 +172,15 @@ function ChessGameContent() {
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
-      {game.status === "finished" && (
+      {game.status === "active" ? (
+        <button
+          onClick={handleResign}
+          disabled={resigning}
+          className="text-muted underline text-sm disabled:opacity-60"
+        >
+          {resigning ? "Выходим…" : "Сдаться и выйти"}
+        </button>
+      ) : (
         <button onClick={handleLeave} className="rounded-xl bg-accent text-white px-6 py-3 font-semibold">
           Найти новую игру
         </button>

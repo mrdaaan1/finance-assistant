@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-export async function POST() {
-  const supabase = await createClient();
+async function getProfileId(supabase: Awaited<ReturnType<typeof createClient>>) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
-  }
+  if (!user) return null;
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -17,41 +13,34 @@ export async function POST() {
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
-  if (!profile) {
-    return NextResponse.json({ error: "profile_not_found" }, { status: 404 });
+  return profile?.id ?? null;
+}
+
+export async function POST() {
+  const supabase = await createClient();
+  const profileId = await getProfileId(supabase);
+  if (!profileId) {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
 
-  const { data, error } = await supabase.rpc("chess_matchmake", {
-    requesting_user_id: profile.id,
-  });
+  const { data, error } = await supabase.rpc("chess_create_lobby");
 
   if (error) {
-    return NextResponse.json({ error: "matchmake_failed" }, { status: 500 });
+    const code = error.message.includes("already_in_game") ? "already_in_game" : "create_lobby_failed";
+    return NextResponse.json({ error: code }, { status: 400 });
   }
 
-  const gameId = data?.[0]?.game_id ?? null;
-  return NextResponse.json({ gameId });
+  return NextResponse.json({ lobbyId: data as string });
 }
 
 export async function DELETE() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const profileId = await getProfileId(supabase);
+  if (!profileId) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("auth_user_id", user.id)
-    .maybeSingle();
-
-  if (profile) {
-    await supabase.from("chess_queue").delete().eq("user_id", profile.id);
-  }
+  await supabase.rpc("chess_cancel_lobby");
 
   return NextResponse.json({ ok: true });
 }
